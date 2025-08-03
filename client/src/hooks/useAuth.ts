@@ -171,24 +171,58 @@ export function useAuth() {
     }
   };
 
-  const loginBypass = () => {
-    const devUser: User = {
-      uid: 'dev-user-123',
-      email: 'dev@battlecard.local',
-      displayName: 'Developer User',
-      isAdmin: true,
-      wins: 10,
-      losses: 3,
-      hp: 20,
-      energy: 100,
-      deck: [],
-      createdAt: Date.now()
-    };
-    setUser(devUser);
-    toast({
-      title: "Dev Login",
-      description: "Logged in as development user"
-    });
+  const loginBypass = async () => {
+    try {
+      setLoading(true);
+      const devEmail = 'dev@battlecard.local';
+      const devPassword = 'devpassword123';
+      
+      try {
+        // Try to sign in first
+        await signInWithEmailAndPassword(auth, devEmail, devPassword);
+      } catch (signInError: any) {
+        if (signInError.code === 'auth/user-not-found') {
+          // Create the account if it doesn't exist
+          const userCredential = await createUserWithEmailAndPassword(auth, devEmail, devPassword);
+          const { updateProfile } = await import('firebase/auth');
+          await updateProfile(userCredential.user, {
+            displayName: 'Developer User'
+          });
+          
+          // Create user document with admin privileges
+          const devUser: User = {
+            uid: userCredential.user.uid,
+            email: devEmail,
+            displayName: 'Developer User',
+            isAdmin: true,
+            wins: 10,
+            losses: 3,
+            hp: 20,
+            energy: 100,
+            deck: [],
+            createdAt: Date.now()
+          };
+          
+          await setDoc(doc(db, 'users', userCredential.user.uid), devUser);
+        } else {
+          throw signInError;
+        }
+      }
+      
+      toast({
+        title: "Dev Login",
+        description: "Logged in as development user with full Firebase account"
+      });
+    } catch (error: any) {
+      console.error('Dev login failed:', error);
+      toast({
+        title: "Dev Login Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return {

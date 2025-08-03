@@ -309,8 +309,8 @@ export function useFirestore() {
       }
       
       toast({
-        title: "Тестовые комнаты созданы",
-        description: "Добавлены комнаты для тестирования боевой системы"
+        title: "Test Rooms Created",
+        description: "Added rooms for testing the battle system"
       });
     } catch (error) {
       console.error('Error creating test rooms:', error);

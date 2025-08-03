@@ -30,7 +30,7 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/" component={() => <Dashboard guestMode={guestMode} />} />
+      <Route path="/" component={() => <Dashboard guestMode={!user && guestMode} />} />
       <Route component={NotFound} />
     </Switch>
   );

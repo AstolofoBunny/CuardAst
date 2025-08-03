@@ -115,14 +115,8 @@ export default function Dashboard({ guestMode = false }: DashboardProps) {
                   )}
                 </div>
                 <div className="flex items-center space-x-4 text-xs">
-                  <span className="text-yellow-400">Побед: {displayUser.wins}</span>
-                  <span className="text-red-400">Поражений: {displayUser.losses}</span>
-                  {!guestMode && (
-                    <>
-                      <span className="text-green-400">HP: {displayUser.hp}/20</span>
-                      <span className="text-blue-400">Энергия: {displayUser.energy}/100</span>
-                    </>
-                  )}
+                  <span className="text-yellow-400">Wins: {displayUser.wins}</span>
+                  <span className="text-red-400">Losses: {displayUser.losses}</span>
                 </div>
               </div>
             </div>
@@ -254,9 +248,9 @@ export default function Dashboard({ guestMode = false }: DashboardProps) {
                     <div>
                       <h2 className="text-3xl font-bold text-yellow-400 mb-2">
                         <i className="fas fa-users mr-2"></i>
-                        Боевые Комнаты
+                        Battle Rooms
                       </h2>
-                      <p className="text-gray-400">Присоединяйся к активным битвам или наблюдай за матчами</p>
+                      <p className="text-gray-400">Join active battles or spectate ongoing matches</p>
                     </div>
                     {user && user.isAdmin && (
                       <Button
@@ -264,7 +258,7 @@ export default function Dashboard({ guestMode = false }: DashboardProps) {
                         className="bg-purple-600 hover:bg-purple-700"
                       >
                         <i className="fas fa-plus mr-2"></i>
-                        Создать Тестовые Комнаты
+                        Create Test Rooms
                       </Button>
                     )}
                   </div>
@@ -324,22 +318,22 @@ export default function Dashboard({ guestMode = false }: DashboardProps) {
                           {guestMode ? (
                             <>
                               <i className="fas fa-lock mr-2"></i>
-                              Нужна Авторизация
+                              Login Required
                             </>
                           ) : user && room.players.includes(user.uid) ? (
                             <>
                               <i className="fas fa-check mr-2"></i>
-                              Присоединился
+                              Joined
                             </>
                           ) : room.status === 'waiting' ? (
                             <>
                               <i className="fas fa-sword mr-2"></i>
-                              Войти в Сражение
+                              Join Battle
                             </>
                           ) : (
                             <>
                               <i className="fas fa-eye mr-2"></i>
-                              Наблюдать
+                              Spectate
                             </>
                           )}
                         </Button>
@@ -393,9 +387,9 @@ export default function Dashboard({ guestMode = false }: DashboardProps) {
                     <div className="mb-6">
                       <h2 className="text-3xl font-bold text-yellow-400 mb-2">
                         <i className="fas fa-plus mr-2"></i>
-                        Создать Боевую Комнату
+                        Create Battle Room
                       </h2>
-                      <p className="text-gray-400">Настрой новую арену для битвы с другими воинами</p>
+                      <p className="text-gray-400">Set up a new battle arena for other warriors</p>
                     </div>
 
                     <Card className="max-w-2xl mx-auto bg-gray-800 border-blue-600 p-8">
