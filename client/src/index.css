@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(220, 27%, 11%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(220, 27%, 15%);
+  --muted-foreground: hsl(220, 9%, 46%);
+  --popover: hsl(220, 27%, 11%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(220, 27%, 11%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(220, 13%, 18%);
+  --input: hsl(220, 13%, 18%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(220, 27%, 15%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(220, 27%, 15%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(60, 9%, 98%);
+  --ring: hsl(220, 9%, 46%);
+  --radius: 0.5rem;
+  
+  --game-dark: hsl(225, 39%, 9%);
+  --game-darker: hsl(225, 39%, 7%);
+  --game-blue: hsl(207, 90%, 54%);
+  --game-purple: hsl(271, 81%, 56%);
+  --game-red: hsl(348, 86%, 61%);
+  --game-gold: hsl(43, 96%, 57%);
+  --game-green: hsl(145, 63%, 49%);
+  --game-gray: hsl(210, 22%, 22%);
+}
+
+.dark {
+  --background: hsl(220, 27%, 11%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(220, 27%, 15%);
+  --muted-foreground: hsl(220, 9%, 46%);
+  --popover: hsl(220, 27%, 11%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(220, 27%, 11%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(220, 13%, 18%);
+  --input: hsl(220, 13%, 18%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(220, 27%, 15%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(220, 27%, 15%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 62%, 31%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(220, 9%, 46%);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+    background: hsl(var(--game-dark));
+    color: white;
+  }
+}
+
+@layer components {
+  .game-card {
+    @apply transition-all duration-300 hover:scale-105;
+  }
+  
+  .game-card:hover {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  }
+  
+  .battle-card-selected {
+    @apply border-2;
+    border-color: hsl(var(--game-gold));
+    box-shadow: 0 0 20px hsla(var(--game-gold), 0.5);
+  }
+  
+  .ability-card-selected {
+    @apply border-2;
+    border-color: hsl(var(--game-purple));
+    box-shadow: 0 0 20px hsla(var(--game-purple), 0.3);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--game-darker));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--game-gray));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--game-blue));
+}

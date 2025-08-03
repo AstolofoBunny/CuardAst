@@ -1,0 +1,327 @@
+import { useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { GameCard } from '@/components/GameCard';
+import { GameCard as GameCardType } from '@/types/game';
+import { useFirestore } from '@/hooks/useFirestore';
+import { useAuth } from '@/hooks/useAuth';
+
+export function AdminPanel() {
+  const { user } = useAuth();
+  const { cards, createCard, updateCard, deleteCard, rankings } = useFirestore();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<GameCardType | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    type: 'battle' as 'battle' | 'ability',
+    class: 'melee' as 'melee' | 'ranged' | 'mage',
+    health: 0,
+    damage: 0,
+    cost: 0,
+    imageUrl: '',
+    description: '',
+    passiveSkill: ''
+  });
+
+  if (!user?.isAdmin) {
+    return (
+      <div className="p-6 text-center">
+        <h2 className="text-2xl font-bold text-red-400 mb-4">Access Denied</h2>
+        <p className="text-gray-400">You don't have admin privileges.</p>
+      </div>
+    );
+  }
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      type: 'battle',
+      class: 'melee',
+      health: 0,
+      damage: 0,
+      cost: 0,
+      imageUrl: '',
+      description: '',
+      passiveSkill: ''
+    });
+    setEditingCard(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const cardData: Omit<GameCardType, 'id'> = {
+      name: formData.name,
+      type: formData.type,
+      imageUrl: formData.imageUrl,
+      isBase: false,
+      ...(formData.type === 'battle' && {
+        class: formData.class,
+        health: formData.health,
+        damage: formData.damage,
+        passiveSkill: formData.passiveSkill || undefined
+      }),
+      ...(formData.type === 'ability' && {
+        cost: formData.cost,
+        description: formData.description
+      })
+    };
+
+    if (editingCard) {
+      await updateCard(editingCard.id, cardData);
+    } else {
+      await createCard(cardData);
+    }
+
+    resetForm();
+    setIsCreateDialogOpen(false);
+  };
+
+  const handleEdit = (card: GameCardType) => {
+    setEditingCard(card);
+    setFormData({
+      name: card.name,
+      type: card.type,
+      class: card.class || 'melee',
+      health: card.health || 0,
+      damage: card.damage || 0,
+      cost: card.cost || 0,
+      imageUrl: card.imageUrl,
+      description: card.description || '',
+      passiveSkill: card.passiveSkill || ''
+    });
+    setIsCreateDialogOpen(true);
+  };
+
+  const handleDelete = async (cardId: string) => {
+    if (confirm('Are you sure you want to delete this card?')) {
+      await deleteCard(cardId);
+    }
+  };
+
+  const customCards = cards.filter(card => !card.isBase);
+  const totalPlayers = rankings.length;
+  const totalBattles = rankings.reduce((sum, player) => sum + player.wins + player.losses, 0);
+
+  return (
+    <div className="p-6">
+      <div className="mb-6">
+        <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+          <i className="fas fa-shield-alt mr-2"></i>
+          Admin Panel
+        </h2>
+        <p className="text-gray-400">Manage cards and monitor game statistics</p>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        {/* Card Management */}
+        <Card className="bg-gray-800 border-blue-600 p-6">
+          <h3 className="text-xl font-bold mb-4">Card Management</h3>
+          
+          <div className="space-y-4 mb-6">
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  onClick={resetForm}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3"
+                >
+                  <i className="fas fa-plus mr-2"></i>
+                  Add New Card
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-gray-800 border-blue-600 max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-yellow-400">
+                    {editingCard ? 'Edit Card' : 'Create New Card'}
+                  </DialogTitle>
+                </DialogHeader>
+                
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      placeholder="Card Name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      required
+                      className="bg-gray-900 border-gray-600"
+                    />
+                    
+                    <Select value={formData.type} onValueChange={(value: 'battle' | 'ability') => setFormData({ ...formData, type: value })}>
+                      <SelectTrigger className="bg-gray-900 border-gray-600">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="battle">Battle Unit</SelectItem>
+                        <SelectItem value="ability">Ability</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Input
+                    placeholder="Image URL"
+                    value={formData.imageUrl}
+                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                    required
+                    className="bg-gray-900 border-gray-600"
+                  />
+
+                  {formData.type === 'battle' && (
+                    <>
+                      <div className="grid grid-cols-3 gap-4">
+                        <Select value={formData.class} onValueChange={(value: 'melee' | 'ranged' | 'mage') => setFormData({ ...formData, class: value })}>
+                          <SelectTrigger className="bg-gray-900 border-gray-600">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="melee">Melee</SelectItem>
+                            <SelectItem value="ranged">Ranged</SelectItem>
+                            <SelectItem value="mage">Mage</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        
+                        <Input
+                          type="number"
+                          placeholder="Health"
+                          value={formData.health}
+                          onChange={(e) => setFormData({ ...formData, health: parseInt(e.target.value) || 0 })}
+                          className="bg-gray-900 border-gray-600"
+                        />
+                        
+                        <Input
+                          type="number"
+                          placeholder="Damage"
+                          value={formData.damage}
+                          onChange={(e) => setFormData({ ...formData, damage: parseInt(e.target.value) || 0 })}
+                          className="bg-gray-900 border-gray-600"
+                        />
+                      </div>
+                      
+                      <Textarea
+                        placeholder="Passive Skill (optional)"
+                        value={formData.passiveSkill}
+                        onChange={(e) => setFormData({ ...formData, passiveSkill: e.target.value })}
+                        className="bg-gray-900 border-gray-600"
+                      />
+                    </>
+                  )}
+
+                  {formData.type === 'ability' && (
+                    <>
+                      <Input
+                        type="number"
+                        placeholder="Energy Cost"
+                        value={formData.cost}
+                        onChange={(e) => setFormData({ ...formData, cost: parseInt(e.target.value) || 0 })}
+                        className="bg-gray-900 border-gray-600"
+                      />
+                      
+                      <Textarea
+                        placeholder="Ability Description"
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        required
+                        className="bg-gray-900 border-gray-600"
+                      />
+                    </>
+                  )}
+
+                  <div className="flex justify-end space-x-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setIsCreateDialogOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {editingCard ? 'Update' : 'Create'} Card
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {customCards.map((card) => (
+              <div key={card.id} className="flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-700">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
+                    <i className="fas fa-magic text-sm"></i>
+                  </div>
+                  <div>
+                    <div className="font-semibold">{card.name}</div>
+                    <div className="text-sm text-gray-400 capitalize">
+                      {card.type} {card.class && `- ${card.class}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={() => handleEdit(card)}
+                    size="sm"
+                    className="bg-yellow-600 hover:bg-yellow-700 text-black"
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    onClick={() => handleDelete(card.id)}
+                    size="sm"
+                    variant="destructive"
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Game Statistics */}
+        <Card className="bg-gray-800 border-blue-600 p-6">
+          <h3 className="text-xl font-bold mb-4">Game Statistics</h3>
+          
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-gray-900 p-4 rounded-lg text-center">
+              <div className="text-2xl font-bold text-yellow-400">{totalPlayers}</div>
+              <div className="text-sm text-gray-400">Total Players</div>
+            </div>
+            <div className="bg-gray-900 p-4 rounded-lg text-center">
+              <div className="text-2xl font-bold text-green-400">0</div>
+              <div className="text-sm text-gray-400">Active Battles</div>
+            </div>
+            <div className="bg-gray-900 p-4 rounded-lg text-center">
+              <div className="text-2xl font-bold text-red-400">{totalBattles}</div>
+              <div className="text-sm text-gray-400">Total Battles</div>
+            </div>
+            <div className="bg-gray-900 p-4 rounded-lg text-center">
+              <div className="text-2xl font-bold text-purple-400">{cards.length}</div>
+              <div className="text-sm text-gray-400">Total Cards</div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h4 className="font-semibold">Top Players</h4>
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {rankings.slice(0, 5).map((player, index) => (
+                <div key={player.uid} className="text-sm p-2 bg-gray-900 rounded flex justify-between">
+                  <span>
+                    #{index + 1} <span className="text-yellow-400 font-semibold">{player.displayName}</span>
+                  </span>
+                  <span className="text-green-400">{player.wins} wins</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
