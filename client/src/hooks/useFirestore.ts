@@ -269,6 +269,54 @@ export function useFirestore() {
     }
   };
 
+  const createTestRooms = async () => {
+    try {
+      const testRooms = [
+        {
+          name: 'Битва с Огненным Боем',
+          type: 'pve' as const,
+          hostId: 'ai-bot-fire',
+          hostName: 'Огненный Бот',
+          players: ['ai-bot-fire'],
+          maxPlayers: 2,
+          status: 'waiting' as const,
+          description: 'Сразись с огненным ботом в классической битве карт'
+        },
+        {
+          name: 'Ледяная Арена',
+          type: 'pve' as const,
+          hostId: 'ai-bot-ice',
+          hostName: 'Ледяной Страж',
+          players: ['ai-bot-ice'],
+          maxPlayers: 2,
+          status: 'waiting' as const,
+          description: 'Проверь свои навыки против ледяного противника'
+        },
+        {
+          name: 'Открытая PvP Битва',
+          type: 'pvp' as const,
+          hostId: 'test-host',
+          hostName: 'Хост Тестер',
+          players: ['test-host'],
+          maxPlayers: 2,
+          status: 'waiting' as const,
+          description: 'Открытая комната для сражений с другими игроками'
+        }
+      ];
+
+      for (const room of testRooms) {
+        await createRoom(room);
+      }
+      
+      toast({
+        title: "Тестовые комнаты созданы",
+        description: "Добавлены комнаты для тестирования боевой системы"
+      });
+    } catch (error) {
+      console.error('Error creating test rooms:', error);
+    }
+  };
+
   return {
     cards,
     rooms,
@@ -281,6 +329,7 @@ export function useFirestore() {
     deleteCard,
     createBattle,
     updateBattle,
-    updateUserDeck
+    updateUserDeck,
+    createTestRooms
   };
 }

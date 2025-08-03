@@ -27,6 +27,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
 
   const handleDevLogin = () => {
     loginBypass();
+    onClose();
   };
 
   return (

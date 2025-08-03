@@ -18,7 +18,7 @@ interface DashboardProps {
 
 export default function Dashboard({ guestMode = false }: DashboardProps) {
   const { user, logout } = useAuth();
-  const { rooms, rankings, createRoom, joinRoom } = useFirestore();
+  const { rooms, rankings, createRoom, joinRoom, createTestRooms } = useFirestore();
   const [currentBattleId, setCurrentBattleId] = useState<string | null>(null);
   const [roomForm, setRoomForm] = useState({
     name: '',
@@ -100,28 +100,31 @@ export default function Dashboard({ guestMode = false }: DashboardProps) {
               <i className="fas fa-sword mr-2"></i>
               Battle Arena
             </h1>
-            <div className="flex items-center space-x-2 text-sm">
-              <div className="bg-green-600 px-2 py-1 rounded flex items-center">
-                <i className="fas fa-heart mr-1"></i>
-                <span>{displayUser.hp} HP</span>
-              </div>
-              <div className="bg-yellow-600 px-2 py-1 rounded text-black flex items-center">
-                <i className="fas fa-bolt mr-1"></i>
-                <span>{displayUser.energy} Energy</span>
-              </div>
-            </div>
           </div>
           
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center">
-                <i className="fas fa-user text-sm"></i>
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                <i className="fas fa-user"></i>
               </div>
-              <span>{displayUser.displayName}</span>
-              <span className="text-yellow-400 text-sm">({displayUser.wins} wins)</span>
-              {guestMode && (
-                <span className="text-orange-400 text-xs">(Guest)</span>
-              )}
+              <div className="flex flex-col">
+                <div className="flex items-center space-x-2">
+                  <span className="font-semibold">{displayUser.displayName}</span>
+                  {guestMode && (
+                    <span className="text-orange-400 text-xs">(Guest)</span>
+                  )}
+                </div>
+                <div className="flex items-center space-x-4 text-xs">
+                  <span className="text-yellow-400">Побед: {displayUser.wins}</span>
+                  <span className="text-red-400">Поражений: {displayUser.losses}</span>
+                  {!guestMode && (
+                    <>
+                      <span className="text-green-400">HP: {displayUser.hp}/20</span>
+                      <span className="text-blue-400">Энергия: {displayUser.energy}/100</span>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
             {guestMode ? (
               <Button
@@ -247,12 +250,23 @@ export default function Dashboard({ guestMode = false }: DashboardProps) {
               {/* Rooms Tab */}
               <TabsContent value="rooms">
                 <div className="p-6">
-                  <div className="mb-6">
-                    <h2 className="text-3xl font-bold text-yellow-400 mb-2">
-                      <i className="fas fa-users mr-2"></i>
-                      Battle Rooms
-                    </h2>
-                    <p className="text-gray-400">Join active battles or spectate ongoing matches</p>
+                  <div className="mb-6 flex justify-between items-center">
+                    <div>
+                      <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                        <i className="fas fa-users mr-2"></i>
+                        Боевые Комнаты
+                      </h2>
+                      <p className="text-gray-400">Присоединяйся к активным битвам или наблюдай за матчами</p>
+                    </div>
+                    {user && user.isAdmin && (
+                      <Button
+                        onClick={createTestRooms}
+                        className="bg-purple-600 hover:bg-purple-700"
+                      >
+                        <i className="fas fa-plus mr-2"></i>
+                        Создать Тестовые Комнаты
+                      </Button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -310,22 +324,22 @@ export default function Dashboard({ guestMode = false }: DashboardProps) {
                           {guestMode ? (
                             <>
                               <i className="fas fa-lock mr-2"></i>
-                              Login Required
+                              Нужна Авторизация
                             </>
                           ) : user && room.players.includes(user.uid) ? (
                             <>
                               <i className="fas fa-check mr-2"></i>
-                              Joined
+                              Присоединился
                             </>
                           ) : room.status === 'waiting' ? (
                             <>
                               <i className="fas fa-sword mr-2"></i>
-                              Join Battle
+                              Войти в Сражение
                             </>
                           ) : (
                             <>
                               <i className="fas fa-eye mr-2"></i>
-                              Spectate
+                              Наблюдать
                             </>
                           )}
                         </Button>
@@ -379,9 +393,9 @@ export default function Dashboard({ guestMode = false }: DashboardProps) {
                     <div className="mb-6">
                       <h2 className="text-3xl font-bold text-yellow-400 mb-2">
                         <i className="fas fa-plus mr-2"></i>
-                        Create Battle Room
+                        Создать Боевую Комнату
                       </h2>
-                      <p className="text-gray-400">Set up a new battle arena for other warriors</p>
+                      <p className="text-gray-400">Настрой новую арену для битвы с другими воинами</p>
                     </div>
 
                     <Card className="max-w-2xl mx-auto bg-gray-800 border-blue-600 p-8">
