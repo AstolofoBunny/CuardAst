@@ -171,6 +171,26 @@ export function useAuth() {
     }
   };
 
+  const loginBypass = () => {
+    const devUser: User = {
+      uid: 'dev-user-123',
+      email: 'dev@battlecard.local',
+      displayName: 'Developer User',
+      isAdmin: true,
+      wins: 10,
+      losses: 3,
+      hp: 20,
+      energy: 100,
+      deck: [],
+      createdAt: Date.now()
+    };
+    setUser(devUser);
+    toast({
+      title: "Dev Login",
+      description: "Logged in as development user"
+    });
+  };
+
   return {
     user,
     loading,
@@ -180,6 +200,7 @@ export function useAuth() {
     logout,
     updateUserStats,
     updateUserHP,
-    updateUserEnergy
+    updateUserEnergy,
+    loginBypass
   };
 }

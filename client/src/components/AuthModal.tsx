@@ -7,12 +7,13 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface AuthModalProps {
   open: boolean;
+  onClose: () => void;
 }
 
-export function AuthModal({ open }: AuthModalProps) {
+export function AuthModal({ open, onClose }: AuthModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { signInWithEmail, registerWithEmail, signInWithGoogle, loading } = useAuth();
+  const { signInWithEmail, registerWithEmail, signInWithGoogle, loginBypass, loading } = useAuth();
 
   const handleEmailAuth = async (isLogin: boolean) => {
     if (!email || !password) return;
@@ -24,8 +25,12 @@ export function AuthModal({ open }: AuthModalProps) {
     }
   };
 
+  const handleDevLogin = () => {
+    loginBypass();
+  };
+
   return (
-    <Dialog open={open} modal>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="w-96 max-w-md mx-4 bg-gray-800 border border-blue-600">
         <DialogHeader className="text-center mb-6">
           <DialogTitle className="text-2xl font-bold text-yellow-400 mb-2">
@@ -94,7 +99,7 @@ export function AuthModal({ open }: AuthModalProps) {
           </TabsContent>
         </Tabs>
 
-        <div className="mt-4">
+        <div className="mt-4 space-y-2">
           <Button
             onClick={signInWithGoogle}
             disabled={loading}
@@ -102,6 +107,16 @@ export function AuthModal({ open }: AuthModalProps) {
           >
             <i className="fab fa-google mr-2"></i>
             Continue with Google
+          </Button>
+          
+          {/* Development bypass login */}
+          <Button
+            onClick={handleDevLogin}
+            disabled={loading}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 flex items-center justify-center"
+          >
+            <i className="fas fa-code mr-2"></i>
+            Dev Login (Local Only)
           </Button>
         </div>
       </DialogContent>

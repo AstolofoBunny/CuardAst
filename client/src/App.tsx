@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ import NotFound from "@/pages/not-found";
 
 function Router() {
   const { user, loading } = useAuth();
+  const [guestMode, setGuestMode] = useState(false);
 
   if (loading) {
     return (
@@ -22,13 +24,13 @@ function Router() {
     );
   }
 
-  if (!user) {
-    return <AuthModal open={true} />;
+  if (!user && !guestMode) {
+    return <AuthModal open={true} onClose={() => setGuestMode(true)} />;
   }
 
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={() => <Dashboard guestMode={guestMode} />} />
       <Route component={NotFound} />
     </Switch>
   );

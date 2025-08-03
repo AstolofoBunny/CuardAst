@@ -12,7 +12,11 @@ import { BattleInterface } from '@/components/BattleInterface';
 import { AdminPanel } from '@/components/AdminPanel';
 import { Room } from '@/types/game';
 
-export default function Dashboard() {
+interface DashboardProps {
+  guestMode?: boolean;
+}
+
+export default function Dashboard({ guestMode = false }: DashboardProps) {
   const { user, logout } = useAuth();
   const { rooms, rankings, createRoom, joinRoom } = useFirestore();
   const [currentBattleId, setCurrentBattleId] = useState<string | null>(null);
@@ -22,7 +26,19 @@ export default function Dashboard() {
     description: ''
   });
 
-  if (!user) return null;
+  // Guest mode mock user for display purposes only
+  const displayUser = user || {
+    uid: 'guest',
+    email: 'guest@battlecard.local',
+    displayName: 'Guest User',
+    isAdmin: false,
+    wins: 0,
+    losses: 0,
+    hp: 20,
+    energy: 100,
+    deck: [],
+    createdAt: Date.now()
+  };
 
   if (currentBattleId) {
     return (
@@ -36,13 +52,13 @@ export default function Dashboard() {
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!roomForm.name) return;
+    if (!user || !roomForm.name) return;
 
     const roomData: Omit<Room, 'id' | 'createdAt'> = {
       name: roomForm.name,
       type: roomForm.type,
       hostId: user.uid,
-      hostName: user.displayName,
+      hostName: user.displayName || 'Anonymous',
       players: [user.uid],
       maxPlayers: roomForm.type === 'pvp' ? 2 : 1,
       status: 'waiting',
@@ -60,15 +76,19 @@ export default function Dashboard() {
   };
 
   const handleJoinRoom = async (roomId: string) => {
-    const success = await joinRoom(roomId, user.uid);
+    if (guestMode) {
+      alert('Please login to join rooms');
+      return;
+    }
+    const success = await joinRoom(roomId, user!.uid);
     if (success) {
       // TODO: Create battle and navigate to battle interface
       // setCurrentBattleId(battleId);
     }
   };
 
-  const userHPPercent = (user.hp / 20) * 100;
-  const userEnergyPercent = (user.energy / 100) * 100;
+  const userHPPercent = (displayUser.hp / 20) * 100;
+  const userEnergyPercent = (displayUser.energy / 100) * 100;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -83,11 +103,11 @@ export default function Dashboard() {
             <div className="flex items-center space-x-2 text-sm">
               <div className="bg-green-600 px-2 py-1 rounded flex items-center">
                 <i className="fas fa-heart mr-1"></i>
-                <span>{user.hp} HP</span>
+                <span>{displayUser.hp} HP</span>
               </div>
               <div className="bg-yellow-600 px-2 py-1 rounded text-black flex items-center">
                 <i className="fas fa-bolt mr-1"></i>
-                <span>{user.energy} Energy</span>
+                <span>{displayUser.energy} Energy</span>
               </div>
             </div>
           </div>
@@ -97,17 +117,31 @@ export default function Dashboard() {
               <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center">
                 <i className="fas fa-user text-sm"></i>
               </div>
-              <span>{user.displayName}</span>
-              <span className="text-yellow-400 text-sm">({user.wins} wins)</span>
+              <span>{displayUser.displayName}</span>
+              <span className="text-yellow-400 text-sm">({displayUser.wins} wins)</span>
+              {guestMode && (
+                <span className="text-orange-400 text-xs">(Guest)</span>
+              )}
             </div>
-            <Button
-              onClick={logout}
-              variant="destructive"
-              size="sm"
-            >
-              <i className="fas fa-sign-out-alt mr-1"></i>
-              Logout
-            </Button>
+            {guestMode ? (
+              <Button
+                onClick={() => window.location.reload()}
+                className="bg-green-600 hover:bg-green-700"
+                size="sm"
+              >
+                <i className="fas fa-sign-in-alt mr-1"></i>
+                Login
+              </Button>
+            ) : (
+              <Button
+                onClick={logout}
+                variant="destructive"
+                size="sm"
+              >
+                <i className="fas fa-sign-out-alt mr-1"></i>
+                Logout
+              </Button>
+            )}
           </div>
         </div>
       </nav>
@@ -133,19 +167,21 @@ export default function Dashboard() {
               </TabsTrigger>
               <TabsTrigger
                 value="deck"
-                className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
+                disabled={guestMode}
+                className={`w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white ${guestMode ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <i className="fas fa-layer-group mr-3"></i>
-                My Deck
+                My Deck {guestMode && '(Login Required)'}
               </TabsTrigger>
               <TabsTrigger
                 value="create-room"
-                className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
+                disabled={guestMode}
+                className={`w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white ${guestMode ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <i className="fas fa-plus mr-3"></i>
-                Create Room
+                Create Room {guestMode && '(Login Required)'}
               </TabsTrigger>
-              {user.isAdmin && (
+              {user && user.isAdmin && (
                 <TabsTrigger
                   value="admin"
                   className="w-full justify-start px-4 py-3 data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-300 hover:text-white"
@@ -264,14 +300,19 @@ export default function Dashboard() {
                         
                         <Button
                           onClick={() => handleJoinRoom(room.id)}
-                          disabled={room.status !== 'waiting' || room.players.includes(user.uid)}
+                          disabled={guestMode || room.status !== 'waiting' || (user ? room.players.includes(user.uid) : false)}
                           className={`w-full font-bold py-3 transition-colors ${
-                            room.status === 'waiting' && !room.players.includes(user.uid)
+                            !guestMode && room.status === 'waiting' && (!user || !room.players.includes(user.uid))
                               ? 'bg-red-600 hover:bg-red-700 text-white'
                               : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                           }`}
                         >
-                          {room.players.includes(user.uid) ? (
+                          {guestMode ? (
+                            <>
+                              <i className="fas fa-lock mr-2"></i>
+                              Login Required
+                            </>
+                          ) : user && room.players.includes(user.uid) ? (
                             <>
                               <i className="fas fa-check mr-2"></i>
                               Joined
@@ -296,22 +337,55 @@ export default function Dashboard() {
 
               {/* Deck Tab */}
               <TabsContent value="deck">
-                <DeckBuilder />
+                {guestMode ? (
+                  <div className="p-6 text-center">
+                    <div className="bg-gray-800 border border-blue-600 rounded-lg p-8">
+                      <i className="fas fa-lock text-4xl text-gray-400 mb-4"></i>
+                      <h3 className="text-xl font-bold text-yellow-400 mb-2">Login Required</h3>
+                      <p className="text-gray-400 mb-4">You need to login to build and manage your deck</p>
+                      <Button
+                        onClick={() => window.location.reload()}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <i className="fas fa-sign-in-alt mr-2"></i>
+                        Login Now
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <DeckBuilder />
+                )}
               </TabsContent>
 
               {/* Create Room Tab */}
               <TabsContent value="create-room">
-                <div className="p-6">
-                  <div className="mb-6">
-                    <h2 className="text-3xl font-bold text-yellow-400 mb-2">
-                      <i className="fas fa-plus mr-2"></i>
-                      Create Battle Room
-                    </h2>
-                    <p className="text-gray-400">Set up a new battle arena for other warriors</p>
+                {guestMode ? (
+                  <div className="p-6 text-center">
+                    <div className="bg-gray-800 border border-blue-600 rounded-lg p-8">
+                      <i className="fas fa-lock text-4xl text-gray-400 mb-4"></i>
+                      <h3 className="text-xl font-bold text-yellow-400 mb-2">Login Required</h3>
+                      <p className="text-gray-400 mb-4">You need to login to create battle rooms</p>
+                      <Button
+                        onClick={() => window.location.reload()}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <i className="fas fa-sign-in-alt mr-2"></i>
+                        Login Now
+                      </Button>
+                    </div>
                   </div>
+                ) : (
+                  <div className="p-6">
+                    <div className="mb-6">
+                      <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                        <i className="fas fa-plus mr-2"></i>
+                        Create Battle Room
+                      </h2>
+                      <p className="text-gray-400">Set up a new battle arena for other warriors</p>
+                    </div>
 
-                  <Card className="max-w-2xl mx-auto bg-gray-800 border-blue-600 p-8">
-                    <form onSubmit={handleCreateRoom} className="space-y-6">
+                    <Card className="max-w-2xl mx-auto bg-gray-800 border-blue-600 p-8">
+                      <form onSubmit={handleCreateRoom} className="space-y-6">
                       <Input
                         placeholder="Room Name"
                         value={roomForm.name}
@@ -386,13 +460,14 @@ export default function Dashboard() {
                           Create Room
                         </Button>
                       </div>
-                    </form>
-                  </Card>
-                </div>
+                      </form>
+                    </Card>
+                  </div>
+                )}
               </TabsContent>
 
               {/* Admin Tab */}
-              {user.isAdmin && (
+              {user && user.isAdmin && (
                 <TabsContent value="admin">
                   <AdminPanel />
                 </TabsContent>
