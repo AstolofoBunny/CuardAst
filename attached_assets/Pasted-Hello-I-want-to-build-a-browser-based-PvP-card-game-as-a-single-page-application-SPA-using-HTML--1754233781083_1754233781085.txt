@@ -1,0 +1,69 @@
+Hello! I want to build a browser-based PvP card game as a single-page application (SPA) using HTML, CSS, and JavaScript on the frontend with Firebase backend services. No Node.js or server-side code, everything client-side.
+
+The main features:
+
+User authentication with Firebase Auth supporting email/password and Google sign-in. There are two roles: normal users and admins.
+
+After login, users see a main page with tabs:
+
+Ranking: top 10 players by PvP wins (from Firestore)
+
+Rooms: list of all active PvP rooms, users can join any room
+
+Deck: user can build their deck of 10 cards from all available cards (base + admin-created)
+
+Create Room: user creates a PvP or PvE room (PvE is vs bot with a fixed deck)
+
+Cards have two types: Battle Units and Abilities.
+Battle Units have health, damage, passive skill (optional), and hidden stats: critical chance (5%) and critical damage (50%) which can be boosted by abilities.
+Battle units have classes: melee, ranged, mage, with rock-paper-scissors advantages: melee > mage (+15% damage), mage > ranged, ranged > melee.
+
+Base set of 10 cards are hardcoded but editable by admins; admins can also add, edit, and delete custom cards.
+
+Deck building UI allows drag and drop or clicking to add/remove cards visually. Deck is saved in Firestore under user profile.
+
+PvP rooms synchronize players with Firestore:
+
+When two players join a room, a battle starts.
+
+Both roll dice to decide who goes first.
+
+Each player starts with 20 HP and 100 energy.
+
+Each round players select a battle card and optionally play ability cards using energy.
+
+Players press “Ready” button to submit moves; when both ready, the round resolves: winning card deals 1 damage to enemy HP, losing card goes to pass, cards are cycled in deck.
+
+Energy regenerates +20 on round win, +15 on loss.
+
+Game ends when a player’s HP reaches 0; winner gets +1 win counted in ranking.
+
+Admin panel accessible from admin profile lets admins manage cards and see basic stats.
+
+Technical stack and instructions:
+
+Use Firebase Authentication (email + Google) for login.
+
+Use Firebase Firestore for real-time data: users, decks, cards, rooms, matches, rankings.
+
+Use Firebase SDK loaded via CDN as ES modules in the browser.
+
+Use Tailwind CSS (via CDN) or custom CSS for UI styling.
+
+All code must be frontend only (no Node.js or backend servers).
+
+Use modular, clean JavaScript with async/await.
+
+The app must have a fully visual UI with buttons, lists, drag-and-drop or click interactions, status displays, health bars, energy bars, and card images.
+
+Cards must show their stats visually.
+
+Room list updates live as rooms are created/joined.
+
+Battle UI should show each player’s HP, energy, current cards in hand, played cards, and ready status.
+
+Dependencies to install or link (preferably via CDN):
+
+Firebase app, auth, firestore (latest 10.x versions) as ES modules from https://www.gstatic.com/firebasejs/
+
+Tailwind CSS CDN https://cdn.tailwindcss.com
