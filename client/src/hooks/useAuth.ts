@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser
@@ -24,11 +24,10 @@ export function useAuth() {
       if (firebaseUser) {
         try {
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          
+
           if (userDoc.exists()) {
             setUser(userDoc.data() as User);
           } else {
-            // Create new user document
             const newUser: User = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
@@ -41,16 +40,16 @@ export function useAuth() {
               deck: [],
               createdAt: Date.now()
             };
-            
+
             await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
             setUser(newUser);
           }
         } catch (error) {
           console.error('Error fetching user data:', error);
           toast({
-            title: "Error",
-            description: "Failed to load user data",
-            variant: "destructive"
+            title: 'Error',
+            description: 'Failed to load user data',
+            variant: 'destructive'
           });
         }
       } else {
@@ -67,14 +66,14 @@ export function useAuth() {
       setLoading(true);
       await signInWithEmailAndPassword(auth, email, password);
       toast({
-        title: "Success",
-        description: "Signed in successfully!"
+        title: 'Success',
+        description: 'Signed in successfully!'
       });
     } catch (error: any) {
       toast({
-        title: "Sign In Error",
+        title: 'Sign In Error',
         description: error.message,
-        variant: "destructive"
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
@@ -84,16 +83,34 @@ export function useAuth() {
   const registerWithEmail = async (email: string, password: string) => {
     try {
       setLoading(true);
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+
+      const newUser: User = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email || '',
+        displayName: firebaseUser.displayName || 'Anonymous',
+        isAdmin: false,
+        wins: 0,
+        losses: 0,
+        hp: 20,
+        energy: 100,
+        deck: [],
+        createdAt: Date.now()
+      };
+
+      await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+      setUser(newUser);
+
       toast({
-        title: "Success",
-        description: "Account created successfully!"
+        title: 'Success',
+        description: 'Account created successfully!'
       });
     } catch (error: any) {
       toast({
-        title: "Registration Error", 
+        title: 'Registration Error',
         description: error.message,
-        variant: "destructive"
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
@@ -105,14 +122,14 @@ export function useAuth() {
       setLoading(true);
       await signInWithPopup(auth, provider);
       toast({
-        title: "Success",
-        description: "Signed in with Google successfully!"
+        title: 'Success',
+        description: 'Signed in with Google successfully!'
       });
     } catch (error: any) {
       toast({
-        title: "Google Sign In Error",
+        title: 'Google Sign In Error',
         description: error.message,
-        variant: "destructive"
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
@@ -123,21 +140,21 @@ export function useAuth() {
     try {
       await signOut(auth);
       toast({
-        title: "Success",
-        description: "Signed out successfully!"
+        title: 'Success',
+        description: 'Signed out successfully!'
       });
     } catch (error: any) {
       toast({
-        title: "Sign Out Error",
+        title: 'Sign Out Error',
         description: error.message,
-        variant: "destructive"
+        variant: 'destructive'
       });
     }
   };
 
   const updateUserStats = async (wins: number, losses: number) => {
     if (!user) return;
-    
+
     try {
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, { wins, losses });
@@ -149,7 +166,7 @@ export function useAuth() {
 
   const updateUserHP = async (hp: number) => {
     if (!user) return;
-    
+
     try {
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, { hp });
@@ -161,7 +178,7 @@ export function useAuth() {
 
   const updateUserEnergy = async (energy: number) => {
     if (!user) return;
-    
+
     try {
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, { energy });
@@ -176,20 +193,17 @@ export function useAuth() {
       setLoading(true);
       const devEmail = 'dev@battlecard.local';
       const devPassword = 'devpassword123';
-      
+
       try {
-        // Try to sign in first
         await signInWithEmailAndPassword(auth, devEmail, devPassword);
       } catch (signInError: any) {
         if (signInError.code === 'auth/user-not-found') {
-          // Create the account if it doesn't exist
           const userCredential = await createUserWithEmailAndPassword(auth, devEmail, devPassword);
           const { updateProfile } = await import('firebase/auth');
           await updateProfile(userCredential.user, {
             displayName: 'Developer User'
           });
-          
-          // Create user document with admin privileges
+
           const devUser: User = {
             uid: userCredential.user.uid,
             email: devEmail,
@@ -202,23 +216,23 @@ export function useAuth() {
             deck: [],
             createdAt: Date.now()
           };
-          
+
           await setDoc(doc(db, 'users', userCredential.user.uid), devUser);
         } else {
           throw signInError;
         }
       }
-      
+
       toast({
-        title: "Dev Login",
-        description: "Logged in as development user with full Firebase account"
+        title: 'Dev Login',
+        description: 'Logged in as development user with full Firebase account'
       });
     } catch (error: any) {
       console.error('Dev login failed:', error);
       toast({
-        title: "Dev Login Error",
+        title: 'Dev Login Error',
         description: error.message,
-        variant: "destructive"
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
