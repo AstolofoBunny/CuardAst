@@ -18,16 +18,26 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
   const handleEmailAuth = async (isLogin: boolean) => {
     if (!email || !password) return;
     
-    if (isLogin) {
-      await signInWithEmail(email, password);
-    } else {
-      await registerWithEmail(email, password);
+    try {
+      if (isLogin) {
+        await signInWithEmail(email, password);
+      } else {
+        await registerWithEmail(email, password);
+      }
+      // Close modal on successful authentication
+      onClose();
+    } catch (error) {
+      // Error handling is done in the auth hook
     }
   };
 
-  const handleDevLogin = () => {
-    loginBypass();
-    onClose();
+  const handleDevLogin = async () => {
+    try {
+      await loginBypass();
+      onClose();
+    } catch (error) {
+      // Error handling is done in the auth hook
+    }
   };
 
   return (
@@ -102,7 +112,14 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
 
         <div className="mt-4 space-y-2">
           <Button
-            onClick={signInWithGoogle}
+            onClick={async () => {
+              try {
+                await signInWithGoogle();
+                onClose();
+              } catch (error) {
+                // Error handling is done in the auth hook
+              }
+            }}
             disabled={loading}
             className="w-full bg-white hover:bg-gray-100 text-gray-800 font-bold py-3 flex items-center justify-center"
           >

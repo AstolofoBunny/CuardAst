@@ -11,7 +11,6 @@ import NotFound from "@/pages/not-found";
 
 function Router() {
   const { user, loading } = useAuth();
-  const [guestMode, setGuestMode] = useState(false);
 
   if (loading) {
     return (
@@ -24,13 +23,9 @@ function Router() {
     );
   }
 
-  if (!user && !guestMode) {
-    return <AuthModal open={true} onClose={() => setGuestMode(true)} />;
-  }
-
   return (
     <Switch>
-      <Route path="/" component={() => <Dashboard guestMode={!user && guestMode} />} />
+      <Route path="/" component={() => <Dashboard user={user} />} />
       <Route component={NotFound} />
     </Switch>
   );
