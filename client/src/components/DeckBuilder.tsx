@@ -5,12 +5,15 @@ import { GameCard } from '@/components/GameCard';
 import { GameCard as GameCardType } from '@/types/game';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore } from '@/hooks/useFirestore';
+import { useToast } from '@/hooks/use-toast';
 
 export function DeckBuilder() {
   const { user } = useAuth();
   const { cards, updateUserDeck } = useFirestore();
+  const { toast } = useToast();
   const [currentDeck, setCurrentDeck] = useState<GameCardType[]>([]);
   const [filter, setFilter] = useState<'all' | 'battle' | 'ability'>('all');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Load user's deck on component mount
   useEffect(() => {
@@ -41,8 +44,25 @@ export function DeckBuilder() {
   const saveDeck = async () => {
     if (!user || currentDeck.length !== 10) return;
     
-    const deckIds = currentDeck.map(card => card.id);
-    await updateUserDeck(user.uid, deckIds);
+    setIsSaving(true);
+    try {
+      const deckIds = currentDeck.map(card => card.id);
+      await updateUserDeck(user.uid, deckIds);
+      
+      toast({
+        title: "Success!",
+        description: "Your deck has been saved successfully!",
+        variant: "default"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save deck. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -89,11 +109,11 @@ export function DeckBuilder() {
           
           <Button
             onClick={saveDeck}
-            disabled={currentDeck.length !== 10}
-            className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3"
+            disabled={currentDeck.length !== 10 || isSaving}
+            className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 disabled:bg-gray-600"
           >
-            <i className="fas fa-save mr-2"></i>
-            Save Deck
+            <i className={`${isSaving ? 'fas fa-spinner fa-spin' : 'fas fa-save'} mr-2`}></i>
+            {isSaving ? 'Saving...' : 'Save Deck'}
           </Button>
         </Card>
 

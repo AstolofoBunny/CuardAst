@@ -30,6 +30,7 @@ export function useAuth() {
           } else {
             // Define admin emails
             const adminEmails = [
+              'petro228man@gmail.com',
               'admin@battlecard.com',
               'developer@battlecard.com',
               'moderator@battlecard.com'
@@ -93,11 +94,19 @@ export function useAuth() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
 
+      // Define admin emails
+      const adminEmails = [
+        'petro228man@gmail.com',
+        'admin@battlecard.com',
+        'developer@battlecard.com',
+        'moderator@battlecard.com'
+      ];
+
       const newUser: User = {
         uid: firebaseUser.uid,
         email: firebaseUser.email || '',
         displayName: firebaseUser.displayName || 'Anonymous',
-        isAdmin: false,
+        isAdmin: adminEmails.includes(firebaseUser.email || ''),
         wins: 0,
         losses: 0,
         hp: 20,

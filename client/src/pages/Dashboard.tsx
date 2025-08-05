@@ -24,6 +24,7 @@ export default function Dashboard({ user }: DashboardProps) {
   const [activeTab, setActiveTab] = useState('ranking');
   const { rooms, rankings, createRoom, joinRoom, markPlayerReady, createTestRooms } = useFirestore();
   const [currentBattleId, setCurrentBattleId] = useState<string | null>(null);
+  const [waitingForBattle, setWaitingForBattle] = useState(false);
   const [roomForm, setRoomForm] = useState({
     name: '',
     type: 'pvp' as 'pvp' | 'pve',
@@ -77,11 +78,13 @@ export default function Dashboard({ user }: DashboardProps) {
         setRoomForm({ name: '', type: 'pvp', description: '' });
         
         if (roomForm.type === 'pve') {
-          // For PvE rooms, start battle immediately
+          // For PvE rooms, go directly to battle tab and start battle
+          setActiveTab('battle');
           setCurrentBattleId(roomId);
         } else {
-          // For PvP rooms, switch to "Battle Rooms" tab to show "Waiting for Opponent"
-          setActiveTab('rooms');
+          // For PvP rooms, go to battle tab and wait for opponent
+          setActiveTab('battle');
+          setWaitingForBattle(true);
         }
       }
     } catch (error) {
@@ -97,8 +100,9 @@ export default function Dashboard({ user }: DashboardProps) {
     }
     const success = await joinRoom(roomId, user!.uid);
     if (success) {
-      // TODO: Create battle and navigate to battle interface
-      // setCurrentBattleId(battleId);
+      // Navigate to battle tab to join the battle
+      setActiveTab('battle');
+      setWaitingForBattle(true);
     }
   };
 
@@ -172,6 +176,13 @@ export default function Dashboard({ user }: DashboardProps) {
                 Ranking
               </TabsTrigger>
               <TabsTrigger
+                value="battle"
+                className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
+              >
+                <i className="fas fa-sword mr-3"></i>
+                Battle
+              </TabsTrigger>
+              <TabsTrigger
                 value="rooms"
                 className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
               >
@@ -211,6 +222,94 @@ export default function Dashboard({ user }: DashboardProps) {
         <div className="flex-1 bg-gray-900">
           <div className="w-full">
             {/* Render content based on active tab */}
+            {activeTab === 'battle' && (
+              <div>
+                <div className="p-6">
+                  <div className="mb-6">
+                    <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                      <i className="fas fa-sword mr-2"></i>
+                      Battle Arena
+                    </h2>
+                    <p className="text-gray-400">Engage in epic battles</p>
+                  </div>
+
+                  {currentBattleId ? (
+                    <BattleInterface
+                      battleId={currentBattleId}
+                      onLeaveBattle={() => {
+                        setCurrentBattleId(null);
+                        setWaitingForBattle(false);
+                        setActiveTab('ranking');
+                      }}
+                    />
+                  ) : waitingForBattle ? (
+                    <Card className="bg-gray-800 border-blue-600 p-8 text-center">
+                      <div className="mb-6">
+                        <div className="animate-pulse rounded-full h-20 w-20 bg-yellow-400 mx-auto mb-4 flex items-center justify-center">
+                          <i className="fas fa-hourglass-half text-gray-900 text-2xl"></i>
+                        </div>
+                        <h3 className="text-2xl font-bold text-yellow-400 mb-2">Waiting for Opponent</h3>
+                        <p className="text-gray-400">Looking for another player to join the battle...</p>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="flex justify-center space-x-4">
+                          <Button
+                            onClick={() => setWaitingForBattle(false)}
+                            variant="outline"
+                            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                          >
+                            <i className="fas fa-arrow-left mr-2"></i>
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              // Start battle function would go here
+                              // For now, simulate starting battle
+                              setWaitingForBattle(false);
+                              setCurrentBattleId('demo-battle-' + Date.now());
+                            }}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            <i className="fas fa-play mr-2"></i>
+                            Start Battle
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  ) : (
+                    <Card className="bg-gray-800 border-blue-600 p-8 text-center">
+                      <div className="mb-6">
+                        <div className="w-20 h-20 bg-gray-700 rounded-full mx-auto mb-4 flex items-center justify-center">
+                          <i className="fas fa-peace text-gray-500 text-3xl"></i>
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-400 mb-2">No Active Battle</h3>
+                        <p className="text-gray-500">Create or join a room to start battling!</p>
+                      </div>
+                      
+                      <div className="flex justify-center space-x-4">
+                        <Button
+                          onClick={() => setActiveTab('create-room')}
+                          disabled={isGuest}
+                          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600"
+                        >
+                          <i className="fas fa-plus mr-2"></i>
+                          Create Room
+                        </Button>
+                        <Button
+                          onClick={() => setActiveTab('rooms')}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          <i className="fas fa-search mr-2"></i>
+                          Find Battle
+                        </Button>
+                      </div>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            )}
+
             {activeTab === 'ranking' && (
               <div>
                 <div className="p-6">
