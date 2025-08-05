@@ -109,11 +109,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
         setCurrentRoomId(roomId);
         
         if (roomForm.type === 'pve') {
-          // For PvE rooms, go directly to battle tab
-          handleTabChange('battle');
+          // For PvE rooms, go directly to fight tab
+          handleTabChange('fight');
         } else {
-          // For PvP rooms, go to current room tab to wait for opponent
-          handleTabChange('current-room');
+          // For PvP rooms, go to waiting room tab to wait for opponent
+          handleTabChange('waiting-room');
         }
       }
     } catch (error) {
@@ -132,11 +132,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
       setCurrentRoomId(roomId);
       const room = rooms.find(r => r.id === roomId);
       if (room?.type === 'pve') {
-        // For PvE rooms, go directly to battle tab
-        handleTabChange('battle');
+        // For PvE rooms, go directly to fight tab
+        handleTabChange('fight');
       } else {
-        // For PvP rooms, go to current room tab
-        handleTabChange('current-room');
+        // For PvP rooms, go to waiting room tab
+        handleTabChange('waiting-room');
       }
     }
   };
@@ -239,15 +239,20 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 <i className="fas fa-layer-group mr-3"></i>
                 My Deck {isGuest && '(Login Required)'}
               </TabsTrigger>
-              {currentRoomId && (
-                <TabsTrigger
-                  value="current-room"
-                  className="w-full justify-start px-4 py-3 data-[state=active]:bg-yellow-600 data-[state=active]:text-white text-gray-300 hover:text-white"
-                >
-                  <i className="fas fa-door-open mr-3"></i>
-                  Current Room
-                </TabsTrigger>
-              )}
+              <TabsTrigger
+                value="waiting-room"
+                className="w-full justify-start px-4 py-3 data-[state=active]:bg-orange-600 data-[state=active]:text-white text-gray-300 hover:text-white"
+              >
+                <i className="fas fa-hourglass-half mr-3"></i>
+                Waiting Room
+              </TabsTrigger>
+              <TabsTrigger
+                value="fight"
+                className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
+              >
+                <i className="fas fa-fist-raised mr-3"></i>
+                Fight
+              </TabsTrigger>
               <TabsTrigger
                 value="create-room"
                 disabled={isGuest}
@@ -312,15 +317,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                         Create Room
                       </Button>
                       <Button
-                        onClick={() => handleTabChange('current-room')}
-                        disabled={!currentRoomId}
-                        className={`px-6 py-3 ${!currentRoomId 
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                          : 'bg-yellow-600 hover:bg-yellow-700'
-                        }`}
+                        onClick={() => handleTabChange('waiting-room')}
+                        className="bg-yellow-600 hover:bg-yellow-700 px-6 py-3"
                       >
-                        <i className="fas fa-door-open mr-2"></i>
-                        Current Room {!currentRoomId && '(Locked)'}
+                        <i className="fas fa-hourglass-half mr-2"></i>
+                        Waiting Room
                       </Button>
                     </div>
                   </Card>
@@ -414,21 +415,28 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
               </div>
             )}
 
-            {activeTab === 'current-room' && currentRoom && (
+            {/* Waiting Room Tab */}
+            {activeTab === 'waiting-room' && (
               <div>
                 <div className="p-6">
                   <div className="mb-6">
-                    <h2 className="text-3xl font-bold text-yellow-400 mb-2">
-                      <i className="fas fa-door-open mr-2"></i>
-                      Current Room
+                    <h2 className="text-3xl font-bold text-orange-400 mb-2">
+                      <i className="fas fa-hourglass-half mr-2"></i>
+                      Waiting Room
                     </h2>
-                    <p className="text-gray-400">Room: {currentRoom.name}</p>
+                    <p className="text-gray-400">
+                      {currentRoom ? `Room: ${currentRoom.name}` : 'Waiting for room data...'}
+                    </p>
                   </div>
 
-                  <Card className="bg-gray-800 border-blue-600 p-8">
+                  <Card className="bg-gray-800 border-orange-600 p-8">
                     <div className="text-center mb-8">
-                      <h3 className="text-2xl font-bold text-blue-400 mb-4">Room: {currentRoom.name}</h3>
-                      <p className="text-gray-400 mb-6">{currentRoom.description}</p>
+                      <h3 className="text-2xl font-bold text-orange-400 mb-4">
+                        {currentRoom ? `Room: ${currentRoom.name}` : 'Test Waiting Room'}
+                      </h3>
+                      <p className="text-gray-400 mb-6">
+                        {currentRoom ? currentRoom.description : 'This is a test room to show the waiting functionality'}
+                      </p>
                       
                       <div className="grid grid-cols-2 gap-6 max-w-md mx-auto">
                         {/* Host Player */}
@@ -436,13 +444,15 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                           <div className="w-16 h-16 bg-blue-600 rounded-full mx-auto mb-3 flex items-center justify-center">
                             <i className="fas fa-crown text-yellow-400 text-xl"></i>
                           </div>
-                          <h4 className="font-bold text-blue-400">{currentRoom.hostName}</h4>
+                          <h4 className="font-bold text-blue-400">
+                            {currentRoom ? currentRoom.hostName : 'Test Host'}
+                          </h4>
                           <p className="text-sm text-gray-400">Host</p>
                         </div>
 
                         {/* Second Player or Waiting */}
                         <div className="bg-gray-700 rounded-lg p-4">
-                          {currentRoom.players.length > 1 ? (
+                          {currentRoom && currentRoom.players && currentRoom.players.length > 1 ? (
                             <>
                               <div className="w-16 h-16 bg-red-600 rounded-full mx-auto mb-3 flex items-center justify-center">
                                 <i className="fas fa-user text-white text-xl"></i>
@@ -462,18 +472,16 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                         </div>
                       </div>
 
-                      {currentRoom.players.length >= 2 && (
-                        <div className="mt-8">
-                          <Button
-                            onClick={() => handleTabChange('battle')}
-                            size="lg"
-                            className="bg-red-600 hover:bg-red-700 text-xl px-8 py-3"
-                          >
-                            <i className="fas fa-play mr-2"></i>
-                            START BATTLE
-                          </Button>
-                        </div>
-                      )}
+                      <div className="mt-8">
+                        <Button
+                          onClick={() => handleTabChange('fight')}
+                          size="lg" 
+                          className="bg-red-600 hover:bg-red-700 text-xl px-8 py-3"
+                        >
+                          <i className="fas fa-play mr-2"></i>
+                          START BATTLE
+                        </Button>
+                      </div>
 
                       <div className="mt-6">
                         <Button
@@ -812,6 +820,118 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                     </Card>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Fight Tab */}
+            {activeTab === 'fight' && (
+              <div>
+                <div className="p-6">
+                  <div className="mb-6">
+                    <h2 className="text-3xl font-bold text-red-400 mb-2">
+                      <i className="fas fa-fist-raised mr-2"></i>
+                      Fight Arena
+                    </h2>
+                    <p className="text-gray-400">
+                      {currentRoom ? `Fighting in: ${currentRoom.name}` : 'Battle Arena - Test Fight'}
+                    </p>
+                  </div>
+
+                  <Card className="bg-gray-800 border-red-600 p-8">
+                    <div className="text-center mb-8">
+                      <div className="w-full h-96 bg-gradient-to-b from-red-900 to-gray-900 rounded-lg mb-6 flex items-center justify-center border-2 border-red-400">
+                        <div className="text-4xl font-bold text-red-400">FIGHT ARENA - ACTIVE BATTLE</div>
+                      </div>
+                    </div>
+
+                    {/* Opponent Cards (Top) */}
+                    <div className="mb-6">
+                      <h3 className="text-lg font-bold text-red-400 mb-3">Opponent Hand</h3>
+                      <div className="flex space-x-2 justify-center">
+                        {[1, 2, 3, 4, 5].map((card) => (
+                          <div key={card} className="w-16 h-24 bg-red-600 rounded border-2 border-red-400 flex items-center justify-center">
+                            <span className="text-xs font-bold">?</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Battlefield */}
+                    <div className="bg-gradient-to-r from-yellow-900 to-orange-900 rounded-lg p-4 mb-6 border-2 border-yellow-600">
+                      <h3 className="text-center text-lg font-bold text-yellow-400 mb-4">BATTLEFIELD</h3>
+                      <div className="grid grid-cols-3 gap-4">
+                        {/* Opponent Battlefield */}
+                        <div className="text-center">
+                          <div className="w-20 h-28 bg-red-700 rounded border-2 border-red-500 mx-auto mb-2 flex items-center justify-center">
+                            <span className="text-sm font-bold">Enemy</span>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
+                            <span className="text-xs">Empty</span>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
+                            <span className="text-xs">Empty</span>
+                          </div>
+                        </div>
+                        
+                        {/* Your Battlefield */}
+                        <div className="text-center">
+                          <div className="w-20 h-28 bg-blue-700 rounded border-2 border-blue-500 mx-auto mb-2 flex items-center justify-center">
+                            <span className="text-sm font-bold">Your</span>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
+                            <span className="text-xs">Empty</span>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
+                            <span className="text-xs">Empty</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Your Cards (Bottom) */}
+                    <div className="mb-6">
+                      <h3 className="text-lg font-bold text-blue-400 mb-3">Your Hand</h3>
+                      <div className="flex space-x-2 justify-center">
+                        {[1, 2, 3, 4, 5].map((card) => (
+                          <div key={card} className="w-16 h-24 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center cursor-pointer hover:bg-blue-500">
+                            <span className="text-xs font-bold">{card}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Battle Controls */}
+                    <div className="flex justify-center mt-6 space-x-4">
+                      <Button className="bg-green-600 hover:bg-green-700 px-6">
+                        <i className="fas fa-play mr-2"></i>
+                        End Turn
+                      </Button>
+                      <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-700 px-6">
+                        <i className="fas fa-shield mr-2"></i>
+                        Defend
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setCurrentRoomId(null);
+                          handleTabChange('ranking');
+                        }}
+                        variant="destructive"
+                        className="px-6"
+                      >
+                        <i className="fas fa-flag mr-2"></i>
+                        Surrender
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
               </div>
             )}
 
