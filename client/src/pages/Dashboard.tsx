@@ -37,7 +37,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
     setActiveTab(newTab);
     navigate(`/${newTab === 'ranking' ? '' : newTab}`);
   };
-  const { rooms, rankings, createRoom, joinRoom, markPlayerReady, createTestRooms } = useFirestore();
+  const { rooms, rankings, cards, createRoom, joinRoom, markPlayerReady, createTestRooms } = useFirestore();
   const [currentBattleId, setCurrentBattleId] = useState<string | null>(null);
   const [waitingForBattle, setWaitingForBattle] = useState(false);
   const [roomForm, setRoomForm] = useState({
@@ -194,7 +194,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 value="battle"
                 className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
               >
-                <i className="fas fa-sword mr-3"></i>
+                <i className="fas fa-crossed-swords mr-3"></i>
                 Battle
               </TabsTrigger>
               <TabsTrigger
@@ -208,7 +208,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 value="cards"
                 className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
               >
-                <i className="fas fa-cards-blank mr-3"></i>
+                <i className="fas fa-th-large mr-3"></i>
                 Cards
               </TabsTrigger>
               <TabsTrigger

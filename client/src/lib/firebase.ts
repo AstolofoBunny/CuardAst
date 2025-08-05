@@ -90,7 +90,7 @@ export const BASE_CARDS = [
     rangedResistance: 10,
     meleeResistance: 10,
     magicResistance: 20,
-    imageUrl: 'https://images.unsplash.com/photo-1566492031773-4f4e44671d66?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&h=140',
+    imageUrl: 'https://i.postimg.cc/0yS8sxSM/d476dd26862dee552b6334e0ae4a510b.jpg',
     passiveAbilities: ['stealth_strike'],
     passiveSkill: 'Stealth Strike: +25% critical damage',
     isBase: true

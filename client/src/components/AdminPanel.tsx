@@ -20,11 +20,18 @@ export function AdminPanel() {
     type: 'battle' as 'battle' | 'ability',
     class: 'melee' as 'melee' | 'ranged' | 'mage',
     health: 0,
-    damage: 0,
+    attack: 0,
+    defense: 0,
+    criticalChance: 0,
+    criticalDamage: 50,
+    rangedResistance: 10,
+    meleeResistance: 10,
+    magicResistance: 10,
     cost: 0,
+    spellType: 'other' as 'ranged' | 'melee' | 'magical' | 'other',
     imageUrl: '',
     description: '',
-    passiveSkill: ''
+    passiveAbilities: [] as string[]
   });
 
   if (!user?.isAdmin) {
@@ -42,11 +49,18 @@ export function AdminPanel() {
       type: 'battle',
       class: 'melee',
       health: 0,
-      damage: 0,
+      attack: 0,
+      defense: 0,
+      criticalChance: 0,
+      criticalDamage: 50,
+      rangedResistance: 10,
+      meleeResistance: 10,
+      magicResistance: 10,
       cost: 0,
+      spellType: 'other',
       imageUrl: '',
       description: '',
-      passiveSkill: ''
+      passiveAbilities: []
     });
     setEditingCard(null);
   };
@@ -62,11 +76,18 @@ export function AdminPanel() {
       ...(formData.type === 'battle' && {
         class: formData.class,
         health: formData.health,
-        damage: formData.damage,
-        passiveSkill: formData.passiveSkill || undefined
+        attack: formData.attack,
+        defense: formData.defense,
+        criticalChance: formData.criticalChance,
+        criticalDamage: formData.criticalDamage,
+        rangedResistance: formData.rangedResistance,
+        meleeResistance: formData.meleeResistance,
+        magicResistance: formData.magicResistance,
+        passiveAbilities: formData.passiveAbilities
       }),
       ...(formData.type === 'ability' && {
         cost: formData.cost,
+        spellType: formData.spellType,
         description: formData.description
       })
     };
@@ -88,11 +109,18 @@ export function AdminPanel() {
       type: card.type,
       class: card.class || 'melee',
       health: card.health || 0,
-      damage: card.damage || 0,
+      attack: card.attack || 0,
+      defense: card.defense || 0,
+      criticalChance: card.criticalChance || 0,
+      criticalDamage: card.criticalDamage || 50,
+      rangedResistance: card.rangedResistance || 10,
+      meleeResistance: card.meleeResistance || 10,
+      magicResistance: card.magicResistance || 10,
       cost: card.cost || 0,
+      spellType: card.spellType || 'other',
       imageUrl: card.imageUrl,
       description: card.description || '',
-      passiveSkill: card.passiveSkill || ''
+      passiveAbilities: card.passiveAbilities || []
     });
     setIsCreateDialogOpen(true);
   };
