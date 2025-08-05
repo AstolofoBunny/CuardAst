@@ -54,7 +54,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
   };
   const { rooms, rankings, cards, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms } = useFirestore();
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
-  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
   const [chatMessages, setChatMessages] = useState([
     { id: 1, user: 'System', message: 'Welcome to Battle Arena!', type: 'system' },
