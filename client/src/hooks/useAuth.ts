@@ -255,16 +255,22 @@ export function useAuth() {
     }
   };
 
-  const updateUserProfile = async (profileData: { displayName: string; email: string }) => {
+  const updateUserProfile = async (profileData: { displayName: string; email: string; profilePicture?: string }) => {
     try {
       if (!user) throw new Error('No user logged in');
       
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
+      const updateData: any = {
         displayName: profileData.displayName
-      });
+      };
       
-      setUser(prev => prev ? { ...prev, displayName: profileData.displayName } : null);
+      if (profileData.profilePicture !== undefined) {
+        updateData.profilePicture = profileData.profilePicture;
+      }
+      
+      await updateDoc(userRef, updateData);
+      
+      setUser(prev => prev ? { ...prev, ...updateData } : null);
       
       toast({
         title: 'Success',

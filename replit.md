@@ -12,6 +12,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (January 2025)
 
+### Migration Fixes (January 5, 2025)
+- **Admin Panel Fixed**: Resolved missing Label import causing admin panel to break for admin users
+- **Profile Settings Enhanced**: Fixed profile picture reset issue when editing display name - form now syncs properly with user data changes
+- **Battle Interface Improved**: Enhanced room creation and joining logic to properly transition to battle states with proper timing
+- **Card Display Verified**: Confirmed all card statistics (attack, defense, health, critical stats, resistances) display correctly in Cards tab
+- **Type Safety Enhanced**: Added profilePicture field to User interface for proper profile image handling
+
 ### Major System Updates
 - **Enhanced Card System**: Implemented comprehensive card statistics including attack, defense, health, critical chance/damage, and element-based resistances
 - **URL-Based Navigation**: Fixed tab persistence issues by implementing proper routing with wouter - each tab now has its own URL

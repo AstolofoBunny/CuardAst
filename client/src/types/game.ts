@@ -97,6 +97,7 @@ export interface User {
   energy: number;
   deck: string[];
   createdAt: number;
+  profilePicture?: string;
 }
 
 export interface Room {

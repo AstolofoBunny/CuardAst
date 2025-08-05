@@ -95,8 +95,18 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
         if (roomForm.type === 'pve') {
           // For PvE rooms, go directly to battle tab and start battle
           handleTabChange('battle');
-          setCurrentBattleId(roomId);
-          setWaitingForBattle(false);
+          // Wait a moment for the room to be created with battleId
+          setTimeout(() => {
+            const createdRoom = rooms.find(r => r.id === roomId);
+            if (createdRoom?.battleId) {
+              setCurrentBattleId(createdRoom.battleId);
+              setWaitingForBattle(false);
+            } else {
+              // Fallback: use roomId as battleId for PvE
+              setCurrentBattleId(roomId);
+              setWaitingForBattle(false);
+            }
+          }, 1000);
         } else {
           // For PvP rooms, go to battle tab and wait for opponent
           handleTabChange('battle');
@@ -119,15 +129,17 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
     if (success) {
       // Navigate to battle tab 
       handleTabChange('battle');
-      // Check if room has battle ID to start battle or wait
-      const room = rooms.find(r => r.id === roomId);
-      if (room?.battleId) {
-        setCurrentBattleId(room.battleId);
-        setWaitingForBattle(false);
-      } else {
-        setWaitingForBattle(true);
-        setCurrentBattleId(null);
-      }
+      // Wait a moment for the room to be updated with battleId
+      setTimeout(() => {
+        const room = rooms.find(r => r.id === roomId);
+        if (room?.battleId) {
+          setCurrentBattleId(room.battleId);
+          setWaitingForBattle(false);
+        } else {
+          setWaitingForBattle(true);
+          setCurrentBattleId(null);
+        }
+      }, 500);
     }
   };
 

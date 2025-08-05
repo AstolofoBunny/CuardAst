@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,17 @@ export default function Settings() {
     email: user?.email || '',
     profilePicture: user?.profilePicture || ''
   });
+
+  // Update form when user data changes
+  React.useEffect(() => {
+    if (user) {
+      setProfileForm({
+        displayName: user.displayName || '',
+        email: user.email || '',
+        profilePicture: user.profilePicture || ''
+      });
+    }
+  }, [user]);
 
   if (!user) {
     return (
