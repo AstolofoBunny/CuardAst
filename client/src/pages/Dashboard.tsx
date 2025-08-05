@@ -239,10 +239,10 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 <i className="fas fa-layer-group mr-3"></i>
                 My Deck {isGuest && '(Login Required)'}
               </TabsTrigger>
-              {currentRoomId && currentRoom && currentRoom.type === 'pvp' && (
+              {currentRoomId && (
                 <TabsTrigger
                   value="current-room"
-                  className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
+                  className="w-full justify-start px-4 py-3 data-[state=active]:bg-yellow-600 data-[state=active]:text-white text-gray-300 hover:text-white"
                 >
                   <i className="fas fa-door-open mr-3"></i>
                   Current Room
@@ -316,11 +316,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                         disabled={!currentRoomId}
                         className={`px-6 py-3 ${!currentRoomId 
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                          : 'bg-purple-600 hover:bg-purple-700'
+                          : 'bg-yellow-600 hover:bg-yellow-700'
                         }`}
                       >
                         <i className="fas fa-door-open mr-2"></i>
-                        Current Room
+                        Current Room {!currentRoomId && '(Locked)'}
                       </Button>
                     </div>
                   </Card>
