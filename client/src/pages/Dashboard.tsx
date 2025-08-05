@@ -20,6 +20,7 @@ interface DashboardProps {
 export default function Dashboard({ user }: DashboardProps) {
   const { logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('ranking');
   const { rooms, rankings, createRoom, joinRoom, createTestRooms } = useFirestore();
   const [currentBattleId, setCurrentBattleId] = useState<string | null>(null);
   const [roomForm, setRoomForm] = useState({
@@ -69,13 +70,22 @@ export default function Dashboard({ user }: DashboardProps) {
       description: roomForm.description
     };
 
-    const roomId = await createRoom(roomData);
-    if (roomId) {
-      setRoomForm({ name: '', type: 'pvp', description: '' });
-      // Auto-join the created room if it's PvE
-      if (roomForm.type === 'pve') {
-        // TODO: Start PvE battle
+    try {
+      const roomId = await createRoom(roomData);
+      if (roomId) {
+        setRoomForm({ name: '', type: 'pvp', description: '' });
+        
+        if (roomForm.type === 'pve') {
+          // For PvE rooms, start battle immediately
+          setCurrentBattleId(roomId);
+        } else {
+          // For PvP rooms, switch to "Battle Rooms" tab to show "Waiting for Opponent"
+          setActiveTab('rooms');
+        }
       }
+    } catch (error) {
+      console.error('Error creating room:', error);
+      alert('Failed to create room. Please try again.');
     }
   };
 
@@ -149,7 +159,7 @@ export default function Dashboard({ user }: DashboardProps) {
       <div className="flex">
         {/* Sidebar */}
         <div className="w-64 bg-gray-800 border-r border-blue-600 min-h-screen">
-          <Tabs defaultValue="ranking" className="w-full" orientation="vertical">
+          <Tabs defaultValue="ranking" className="w-full" orientation="vertical" value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="flex flex-col h-auto bg-transparent p-4 space-y-2">
               <TabsTrigger
                 value="ranking"
@@ -191,11 +201,15 @@ export default function Dashboard({ user }: DashboardProps) {
                 </TabsTrigger>
               )}
             </TabsList>
+          </Tabs>
+        </div>
 
-            {/* Tab Content */}
-            <div className="flex-1">
-              {/* Ranking Tab */}
-              <TabsContent value="ranking">
+        {/* Main Content Area */}
+        <div className="flex-1 bg-gray-900">
+          <div className="w-full">
+            {/* Render content based on active tab */}
+            {activeTab === 'ranking' && (
+              <div>
                 <div className="p-6">
                   <div className="mb-6">
                     <h2 className="text-3xl font-bold text-yellow-400 mb-2">
@@ -242,10 +256,12 @@ export default function Dashboard({ user }: DashboardProps) {
                     </div>
                   </Card>
                 </div>
-              </TabsContent>
+              </div>
+            )}
 
-              {/* Rooms Tab */}
-              <TabsContent value="rooms">
+            {/* Rooms Tab */}
+            {activeTab === 'rooms' && (
+              <div>
                 <div className="p-6">
                   <div className="mb-6 flex justify-between items-center">
                     <div>
@@ -344,10 +360,12 @@ export default function Dashboard({ user }: DashboardProps) {
                     ))}
                   </div>
                 </div>
-              </TabsContent>
+              </div>
+            )}
 
-              {/* Deck Tab */}
-              <TabsContent value="deck">
+            {/* Deck Tab */}
+            {activeTab === 'deck' && (
+              <div>
                 {isGuest ? (
                   <div className="p-6 text-center">
                     <div className="bg-gray-800 border border-blue-600 rounded-lg p-8">
@@ -366,10 +384,12 @@ export default function Dashboard({ user }: DashboardProps) {
                 ) : (
                   <DeckBuilder />
                 )}
-              </TabsContent>
+              </div>
+            )}
 
-              {/* Create Room Tab */}
-              <TabsContent value="create-room">
+            {/* Create Room Tab */}
+            {activeTab === 'create-room' && (
+              <div>
                 {isGuest ? (
                   <div className="p-6 text-center">
                     <div className="bg-gray-800 border border-blue-600 rounded-lg p-8">
@@ -475,16 +495,16 @@ export default function Dashboard({ user }: DashboardProps) {
                     </Card>
                   </div>
                 )}
-              </TabsContent>
+              </div>
+            )}
 
-              {/* Admin Tab */}
-              {user && user.isAdmin && (
-                <TabsContent value="admin">
-                  <AdminPanel />
-                </TabsContent>
-              )}
-            </div>
-          </Tabs>
+            {/* Admin Tab */}
+            {activeTab === 'admin' && user && user.isAdmin && (
+              <div>
+                <AdminPanel />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
