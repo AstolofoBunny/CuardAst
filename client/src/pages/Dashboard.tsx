@@ -32,6 +32,21 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
     setActiveTab(path);
   }, [location]);
 
+  // Handle chat message send
+  const handleSendMessage = () => {
+    if (!chatMessage.trim() || isGuest) return;
+    
+    const newMessage = {
+      id: Date.now(),
+      user: displayUser.displayName || 'Anonymous',
+      message: chatMessage.trim(),
+      type: 'user' as const
+    };
+    
+    setChatMessages(prev => [...prev, newMessage]);
+    setChatMessage('');
+  };
+
   // Handle tab changes with navigation
   const handleTabChange = (newTab: string) => {
     setActiveTab(newTab);
@@ -39,6 +54,13 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
   };
   const { rooms, rankings, cards, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms } = useFirestore();
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [chatMessage, setChatMessage] = useState('');
+  const [chatMessages, setChatMessages] = useState([
+    { id: 1, user: 'System', message: 'Welcome to Battle Arena!', type: 'system' },
+    { id: 2, user: 'Player123', message: 'Looking for opponents!', type: 'user' },
+    { id: 3, user: 'Warrior99', message: 'Anyone want to battle?', type: 'user' }
+  ]);
   const [roomForm, setRoomForm] = useState({
     name: '',
     type: 'pvp' as 'pvp' | 'pve',
@@ -87,7 +109,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
         setCurrentRoomId(roomId);
         
         if (roomForm.type === 'pve') {
-          // For PvE rooms, go directly to secret battle tab
+          // For PvE rooms, go directly to battle tab
           handleTabChange('battle');
         } else {
           // For PvP rooms, go to current room tab to wait for opponent
@@ -248,48 +270,10 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 bg-gray-900 flex flex-col">
-          <div className="flex-1">
-            {/* General Chat */}
-            <div className="fixed bottom-4 left-4 w-80 bg-gray-800 border border-blue-600 rounded-lg shadow-lg z-50">
-              <div className="bg-blue-900 text-white p-3 rounded-t-lg">
-                <h4 className="font-bold text-sm">
-                  <i className="fas fa-comments mr-2"></i>
-                  General Chat
-                </h4>
-              </div>
-              
-              <div className="h-32 overflow-y-auto p-2 bg-gray-900 text-xs">
-                <div className="text-gray-400 mb-1">
-                  <span className="text-blue-400">[System]</span> Welcome to Battle Arena!
-                </div>
-                <div className="text-gray-400 mb-1">
-                  <span className="text-green-400">[Player123]</span> Looking for opponents!
-                </div>
-                <div className="text-gray-400 mb-1">
-                  <span className="text-red-400">[Warrior99]</span> Anyone want to battle?
-                </div>
-              </div>
-              
-              <div className="p-2 bg-gray-800 rounded-b-lg">
-                <div className="flex space-x-1">
-                  <Input
-                    placeholder={isGuest ? "Login to chat" : "Type message..."}
-                    disabled={isGuest}
-                    className="flex-1 h-8 text-xs bg-gray-700 border-gray-600 text-white"
-                  />
-                  <Button
-                    size="sm"
-                    disabled={isGuest}
-                    className="h-8 px-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600"
-                  >
-                    <i className="fas fa-paper-plane text-xs"></i>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="w-full">
+        <div className="flex-1 bg-gray-900 flex">
+          {/* Content */}
+          <div className={`transition-all duration-300 ${chatCollapsed ? 'flex-1' : 'flex-1 mr-80'}`}>
+            <div className="w-full">
             {/* Render content based on active tab */}
             {activeTab === 'battle' && !currentRoom && (
               <div>
@@ -837,7 +821,75 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 <AdminPanel />
               </div>
             )}
+            </div>
           </div>
+          
+          {/* Chat Panel */}
+          <div className={`fixed top-0 right-0 h-full bg-gray-800 border-l border-blue-600 transition-transform duration-300 z-40 ${
+            chatCollapsed ? 'translate-x-full' : 'translate-x-0'
+          } w-80`}>
+            {/* Chat Header */}
+            <div className="bg-blue-900 text-white p-3 flex items-center justify-between">
+              <h4 className="font-bold text-sm">
+                <i className="fas fa-comments mr-2"></i>
+                General Chat
+              </h4>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setChatCollapsed(!chatCollapsed)}
+                className="h-6 w-6 p-0 text-white hover:bg-blue-800"
+              >
+                <i className={`fas ${chatCollapsed ? 'fa-chevron-left' : 'fa-chevron-right'} text-xs`}></i>
+              </Button>
+            </div>
+            
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-2 bg-gray-900 text-xs" style={{ height: 'calc(100vh - 120px)' }}>
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className="text-gray-400 mb-1">
+                  <span className={msg.type === 'system' ? 'text-blue-400' : 'text-green-400'}>
+                    [{msg.user}]
+                  </span> {msg.message}
+                </div>
+              ))}
+            </div>
+            
+            {/* Chat Input */}
+            <div className="p-2 bg-gray-800">
+              <div className="flex space-x-1">
+                <Input
+                  placeholder={isGuest ? "Login to chat" : "Type message..."}
+                  disabled={isGuest}
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  className="flex-1 h-8 text-xs bg-gray-700 border-gray-600 text-white"
+                />
+                <Button
+                  size="sm"
+                  disabled={isGuest || !chatMessage.trim()}
+                  onClick={handleSendMessage}
+                  className="h-8 px-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600"
+                >
+                  <i className="fas fa-paper-plane text-xs"></i>
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Chat Collapse Button (when collapsed) */}
+          {chatCollapsed && (
+            <div className="fixed top-1/2 right-0 transform -translate-y-1/2 z-50">
+              <Button
+                size="sm"
+                onClick={() => setChatCollapsed(false)}
+                className="h-12 w-6 bg-blue-600 hover:bg-blue-700 rounded-l-lg rounded-r-none border-r-0"
+              >
+                <i className="fas fa-comments text-xs"></i>
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

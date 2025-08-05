@@ -33,6 +33,7 @@ function Router() {
       <Route path="/cards" component={() => <Dashboard user={user} activeTab="cards" />} />
       <Route path="/deck" component={() => <Dashboard user={user} activeTab="deck" />} />
       <Route path="/create-room" component={() => <Dashboard user={user} activeTab="create-room" />} />
+      <Route path="/current-room" component={() => <Dashboard user={user} activeTab="current-room" />} />
       <Route path="/admin" component={() => <Dashboard user={user} activeTab="admin" />} />
       <Route path="/settings" component={() => <Settings />} />
       <Route component={NotFound} />
