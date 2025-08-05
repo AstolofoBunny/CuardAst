@@ -12,6 +12,7 @@ import { BattleInterface } from '@/components/BattleInterface';
 import { AdminPanel } from '@/components/AdminPanel';
 import { AuthModal } from '@/components/AuthModal';
 import { Room } from '@/types/game';
+import { Link } from 'wouter';
 
 interface DashboardProps {
   user: any;
@@ -21,7 +22,7 @@ export default function Dashboard({ user }: DashboardProps) {
   const { logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [activeTab, setActiveTab] = useState('ranking');
-  const { rooms, rankings, createRoom, joinRoom, createTestRooms } = useFirestore();
+  const { rooms, rankings, createRoom, joinRoom, markPlayerReady, createTestRooms } = useFirestore();
   const [currentBattleId, setCurrentBattleId] = useState<string | null>(null);
   const [roomForm, setRoomForm] = useState({
     name: '',
@@ -119,20 +120,22 @@ export default function Dashboard({ user }: DashboardProps) {
           <div className="flex items-center space-x-4">
             {user ? (
               <>
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                    <i className="fas fa-user"></i>
-                  </div>
-                  <div className="flex flex-col">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-semibold">{displayUser.displayName}</span>
+                <Link href="/settings">
+                  <div className="flex items-center space-x-3 cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors">
+                    <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                      <i className="fas fa-user"></i>
                     </div>
-                    <div className="flex items-center space-x-4 text-xs">
-                      <span className="text-yellow-400">Wins: {displayUser.wins}</span>
-                      <span className="text-red-400">Losses: {displayUser.losses}</span>
+                    <div className="flex flex-col">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-semibold">{displayUser.displayName}</span>
+                      </div>
+                      <div className="flex items-center space-x-4 text-xs">
+                        <span className="text-yellow-400">Wins: {displayUser.wins}</span>
+                        <span className="text-red-400">Losses: {displayUser.losses}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </Link>
                 <Button
                   onClick={logout}
                   variant="destructive"

@@ -15,7 +15,7 @@ interface BattleInterfaceProps {
 
 export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProps) {
   const { user, updateUserHP, updateUserEnergy, updateUserStats } = useAuth();
-  const { cards, updateBattle } = useFirestore();
+  const { cards, updateBattle, markPlayerReady } = useFirestore();
   const [battle, setBattle] = useState<Battle | null>(null);
   const [selectedBattleCard, setSelectedBattleCard] = useState<string>('');
   const [selectedAbilities, setSelectedAbilities] = useState<string[]>([]);
@@ -71,6 +71,12 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
 
   const handleSelectBattleCard = (cardId: string) => {
     setSelectedBattleCard(cardId);
+  };
+
+  const handleMarkReady = async () => {
+    if (!user || !battle) return;
+    await markPlayerReady(battleId, battleId, user.uid);
+    setIsReady(true);
   };
 
   const handleSelectAbility = (cardId: string) => {

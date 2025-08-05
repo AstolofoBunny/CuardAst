@@ -11,6 +11,7 @@ import {
   limit,
   where,
   getDocs,
+  getDoc,
   setDoc,
   QuerySnapshot,
   DocumentData
@@ -129,10 +130,55 @@ export function useFirestore() {
 
   const createRoom = async (roomData: Omit<Room, 'id' | 'createdAt'>) => {
     try {
-      const docRef = await addDoc(collection(db, 'rooms'), {
+      const roomWithTimestamp = {
         ...roomData,
-        createdAt: Date.now()
-      });
+        createdAt: Date.now(),
+        lastActivity: Date.now() // Track for auto-deletion
+      };
+      
+      const docRef = await addDoc(collection(db, 'rooms'), roomWithTimestamp);
+      
+      // For PvE rooms, immediately create a battle
+      if (roomData.type === 'pve') {
+        const battleData = {
+          roomId: docRef.id,
+          players: {
+            [roomData.hostId]: {
+              uid: roomData.hostId,
+              displayName: roomData.hostName,
+              hp: 20,
+              energy: 100,
+              deck: [], // Will be populated from user's actual deck
+              hand: [],
+              battlefield: [],
+              isReady: false
+            },
+            'ai_opponent': {
+              uid: 'ai_opponent',
+              displayName: 'AI Opponent',
+              hp: 20,
+              energy: 100,
+              deck: [], // AI deck will be auto-generated
+              hand: [],
+              battlefield: [],
+              isReady: true
+            }
+          },
+          currentTurn: roomData.hostId,
+          phase: 'preparation',
+          status: 'active',
+          createdAt: Date.now()
+        };
+        
+        const battleRef = await addDoc(collection(db, 'battles'), battleData);
+        
+        // Update room status to active
+        await updateDoc(doc(db, 'rooms', docRef.id), {
+          status: 'active',
+          battleId: battleRef.id
+        });
+      }
+      
       toast({
         title: "Success",
         description: "Room created successfully!"
@@ -156,10 +202,54 @@ export function useFirestore() {
       if (!room) throw new Error('Room not found');
 
       const updatedPlayers = [...room.players, userId];
-      await updateDoc(roomRef, { 
+      const updatedRoom = {
         players: updatedPlayers,
-        status: updatedPlayers.length >= room.maxPlayers ? 'active' : 'waiting'
-      });
+        status: updatedPlayers.length >= room.maxPlayers ? 'active' : 'waiting',
+        lastActivity: Date.now()
+      };
+
+      await updateDoc(roomRef, updatedRoom);
+      
+      // If room is now full (PvP), create a battle
+      if (room.type === 'pvp' && updatedPlayers.length >= room.maxPlayers) {
+        const battleData = {
+          roomId: roomId,
+          players: {
+            [room.hostId]: {
+              uid: room.hostId,
+              displayName: room.hostName,
+              hp: 20,
+              energy: 100,
+              deck: [], // Will be populated from user's actual deck
+              hand: [],
+              battlefield: [],
+              isReady: false
+            },
+            [userId]: {
+              uid: userId,
+              displayName: 'Player 2', // Will be updated with actual name
+              hp: 20,
+              energy: 100,
+              deck: [],
+              hand: [],
+              battlefield: [],
+              isReady: false
+            }
+          },
+          currentTurn: room.hostId,
+          phase: 'preparation',
+          status: 'waiting_for_ready', // Players need to click "Start Battle"
+          readyCount: 0,
+          createdAt: Date.now()
+        };
+        
+        const battleRef = await addDoc(collection(db, 'battles'), battleData);
+        
+        // Update room with battle ID
+        await updateDoc(roomRef, {
+          battleId: battleRef.id
+        });
+      }
       
       toast({
         title: "Success",
@@ -251,6 +341,83 @@ export function useFirestore() {
     }
   };
 
+  const markPlayerReady = async (roomId: string, battleId: string, playerId: string) => {
+    try {
+      const battleRef = doc(db, 'battles', battleId);
+      const roomRef = doc(db, 'rooms', roomId);
+      
+      // Update player ready status and increment ready count
+      await updateDoc(battleRef, {
+        [`players.${playerId}.isReady`]: true,
+        readyCount: 1 // This will be updated properly in real implementation
+      });
+      
+      // Check if both players are ready (simplified - would need actual count check)
+      // For now, assume 2 ready clicks = start battle
+      const battleDoc = await getDoc(battleRef);
+      if (battleDoc.exists()) {
+        const battleData = battleDoc.data();
+        const readyPlayers = Object.values(battleData.players).filter((p: any) => p.isReady).length;
+        
+        if (readyPlayers >= 2) {
+          // Start the battle
+          await updateDoc(battleRef, {
+            status: 'active',
+            phase: 'battle'
+          });
+          
+          await updateDoc(roomRef, {
+            status: 'active',
+            lastActivity: Date.now()
+          });
+        }
+      }
+      
+      toast({
+        title: "Ready!",
+        description: "Waiting for other players..."
+      });
+    } catch (error) {
+      console.error('Error marking player ready:', error);
+      toast({
+        title: "Error",
+        description: "Failed to mark ready",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Auto-delete rooms after 24 hours of inactivity
+  const cleanupInactiveRooms = async () => {
+    try {
+      const cutoff = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago
+      const roomsQuery = query(
+        collection(db, 'rooms'),
+        where('lastActivity', '<', cutoff)
+      );
+      
+      const snapshot = await getDocs(roomsQuery);
+      
+      for (const roomDoc of snapshot.docs) {
+        const roomData = roomDoc.data();
+        
+        // Delete associated battle if exists
+        if (roomData.battleId) {
+          await deleteDoc(doc(db, 'battles', roomData.battleId));
+        }
+        
+        // Delete the room
+        await deleteDoc(roomDoc.ref);
+      }
+      
+      if (snapshot.docs.length > 0) {
+        console.log(`Cleaned up ${snapshot.docs.length} inactive rooms`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up inactive rooms:', error);
+    }
+  };
+
   const updateUserDeck = async (userId: string, deck: string[]) => {
     try {
       const userRef = doc(db, 'users', userId);
@@ -317,6 +484,16 @@ export function useFirestore() {
     }
   };
 
+  // Run cleanup on component mount
+  useEffect(() => {
+    cleanupInactiveRooms();
+    
+    // Set up interval to run cleanup every hour
+    const cleanup = setInterval(cleanupInactiveRooms, 60 * 60 * 1000);
+    
+    return () => clearInterval(cleanup);
+  }, []);
+
   return {
     cards,
     rooms,
@@ -324,6 +501,7 @@ export function useFirestore() {
     loading,
     createRoom,
     joinRoom,
+    markPlayerReady,
     createCard,
     updateCard,
     deleteCard,

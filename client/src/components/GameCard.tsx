@@ -5,10 +5,11 @@ interface GameCardProps {
   card: GameCardType;
   onClick?: () => void;
   selected?: boolean;
+  disabled?: boolean;
   className?: string;
 }
 
-export function GameCard({ card, onClick, selected, className = '' }: GameCardProps) {
+export function GameCard({ card, onClick, selected, disabled = false, className = '' }: GameCardProps) {
   const getCardBorderColor = () => {
     if (selected) {
       return card.type === 'battle' ? 'border-yellow-400' : 'border-purple-400';
@@ -36,8 +37,10 @@ export function GameCard({ card, onClick, selected, className = '' }: GameCardPr
 
   return (
     <Card 
-      className={`game-card cursor-pointer border-2 ${getCardBorderColor()} bg-gradient-to-b from-gray-800 to-gray-900 p-3 ${className}`}
-      onClick={onClick}
+      className={`game-card border-2 ${getCardBorderColor()} bg-gradient-to-b from-gray-800 to-gray-900 p-3 ${
+        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:scale-105'
+      } transition-all ${className}`}
+      onClick={disabled ? undefined : onClick}
     >
       <div className="text-center mb-2">
         <img 
@@ -45,7 +48,7 @@ export function GameCard({ card, onClick, selected, className = '' }: GameCardPr
           alt={card.name}
           className="w-full h-20 object-cover rounded-lg mb-2"
           onError={(e) => {
-            (e.target as HTMLImageElement).src = `https://via.placeholder.com/200x140/374151/f3f4f6?text=${encodeURIComponent(card.name)}`;
+            (e.target as HTMLImageElement).src = `https://dummyimage.com/200x140/374151/f3f4f6&text=${encodeURIComponent(card.name)}`;
           }}
         />
         <h4 className="font-bold text-sm text-yellow-400">{card.name}</h4>

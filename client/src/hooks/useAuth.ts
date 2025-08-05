@@ -28,11 +28,18 @@ export function useAuth() {
           if (userDoc.exists()) {
             setUser(userDoc.data() as User);
           } else {
+            // Define admin emails
+            const adminEmails = [
+              'admin@battlecard.com',
+              'developer@battlecard.com',
+              'moderator@battlecard.com'
+            ];
+            
             const newUser: User = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || 'Anonymous',
-              isAdmin: false,
+              isAdmin: adminEmails.includes(firebaseUser.email || ''),
               wins: 0,
               losses: 0,
               hp: 20,
@@ -239,6 +246,30 @@ export function useAuth() {
     }
   };
 
+  const updateUserProfile = async (profileData: { displayName: string; email: string }) => {
+    try {
+      if (!user) throw new Error('No user logged in');
+      
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        displayName: profileData.displayName
+      });
+      
+      setUser(prev => prev ? { ...prev, displayName: profileData.displayName } : null);
+      
+      toast({
+        title: 'Success',
+        description: 'Profile updated successfully!'
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Update Error',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  };
+
   return {
     user,
     loading,
@@ -249,6 +280,7 @@ export function useAuth() {
     updateUserStats,
     updateUserHP,
     updateUserEnergy,
-    loginBypass
+    loginBypass,
+    updateUserProfile
   };
 }
