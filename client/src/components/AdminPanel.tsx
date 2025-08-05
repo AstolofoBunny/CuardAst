@@ -132,6 +132,7 @@ export function AdminPanel() {
   };
 
   const customCards = cards.filter(card => !card.isBase);
+  const baseCards = cards.filter(card => card.isBase);
   const totalPlayers = rankings.length;
   const totalBattles = rankings.reduce((sum, player) => sum + player.wins + player.losses, 0);
 
@@ -200,84 +201,111 @@ export function AdminPanel() {
                   {formData.type === 'battle' && (
                     <>
                       <div className="grid grid-cols-3 gap-4">
-                        <Select value={formData.class} onValueChange={(value: 'melee' | 'ranged' | 'mage') => setFormData({ ...formData, class: value })}>
-                          <SelectTrigger className="bg-gray-900 border-gray-600">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="melee">Melee</SelectItem>
-                            <SelectItem value="ranged">Ranged</SelectItem>
-                            <SelectItem value="mage">Mage</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Class Type</Label>
+                          <Select value={formData.class} onValueChange={(value: 'melee' | 'ranged' | 'mage') => setFormData({ ...formData, class: value })}>
+                            <SelectTrigger className="bg-gray-900 border-gray-600">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="melee">Melee</SelectItem>
+                              <SelectItem value="ranged">Ranged</SelectItem>
+                              <SelectItem value="mage">Mage</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                         
-                        <Input
-                          type="number"
-                          placeholder="Health"
-                          value={formData.health}
-                          onChange={(e) => setFormData({ ...formData, health: parseInt(e.target.value) || 0 })}
-                          className="bg-gray-900 border-gray-600"
-                        />
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Health Points</Label>
+                          <Input
+                            type="number"
+                            placeholder="Health"
+                            value={formData.health}
+                            onChange={(e) => setFormData({ ...formData, health: parseInt(e.target.value) || 0 })}
+                            className="bg-gray-900 border-gray-600"
+                          />
+                        </div>
                         
-                        <Input
-                          type="number"
-                          placeholder="Attack"
-                          value={formData.attack}
-                          onChange={(e) => setFormData({ ...formData, attack: parseInt(e.target.value) || 0 })}
-                          className="bg-gray-900 border-gray-600"
-                        />
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Attack Damage</Label>
+                          <Input
+                            type="number"
+                            placeholder="Attack"
+                            value={formData.attack}
+                            onChange={(e) => setFormData({ ...formData, attack: parseInt(e.target.value) || 0 })}
+                            className="bg-gray-900 border-gray-600"
+                          />
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-3 gap-4">
-                        <Input
-                          type="number"
-                          placeholder="Defense"
-                          value={formData.defense}
-                          onChange={(e) => setFormData({ ...formData, defense: parseInt(e.target.value) || 0 })}
-                          className="bg-gray-900 border-gray-600"
-                        />
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Defense Value</Label>
+                          <Input
+                            type="number"
+                            placeholder="Defense"
+                            value={formData.defense}
+                            onChange={(e) => setFormData({ ...formData, defense: parseInt(e.target.value) || 0 })}
+                            className="bg-gray-900 border-gray-600"
+                          />
+                        </div>
                         
-                        <Input
-                          type="number"
-                          placeholder="Crit Chance %"
-                          value={formData.criticalChance}
-                          onChange={(e) => setFormData({ ...formData, criticalChance: parseInt(e.target.value) || 0 })}
-                          className="bg-gray-900 border-gray-600"
-                        />
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Critical Hit Chance (%)</Label>
+                          <Input
+                            type="number"
+                            placeholder="Crit Chance %"
+                            value={formData.criticalChance}
+                            onChange={(e) => setFormData({ ...formData, criticalChance: parseInt(e.target.value) || 0 })}
+                            className="bg-gray-900 border-gray-600"
+                          />
+                        </div>
                         
-                        <Input
-                          type="number"
-                          placeholder="Crit Damage %"
-                          value={formData.criticalDamage}
-                          onChange={(e) => setFormData({ ...formData, criticalDamage: parseInt(e.target.value) || 50 })}
-                          className="bg-gray-900 border-gray-600"
-                        />
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Critical Damage (%)</Label>
+                          <Input
+                            type="number"
+                            placeholder="Crit Damage %"
+                            value={formData.criticalDamage}
+                            onChange={(e) => setFormData({ ...formData, criticalDamage: parseInt(e.target.value) || 50 })}
+                            className="bg-gray-900 border-gray-600"
+                          />
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-3 gap-4">
-                        <Input
-                          type="number"
-                          placeholder="Ranged Resist %"
-                          value={formData.rangedResistance}
-                          onChange={(e) => setFormData({ ...formData, rangedResistance: parseInt(e.target.value) || 10 })}
-                          className="bg-gray-900 border-gray-600"
-                        />
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Ranged Resistance (%)</Label>
+                          <Input
+                            type="number"
+                            placeholder="Ranged Resist %"
+                            value={formData.rangedResistance}
+                            onChange={(e) => setFormData({ ...formData, rangedResistance: parseInt(e.target.value) || 10 })}
+                            className="bg-gray-900 border-gray-600"
+                          />
+                        </div>
                         
-                        <Input
-                          type="number"
-                          placeholder="Melee Resist %"
-                          value={formData.meleeResistance}
-                          onChange={(e) => setFormData({ ...formData, meleeResistance: parseInt(e.target.value) || 10 })}
-                          className="bg-gray-900 border-gray-600"
-                        />
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Melee Resistance (%)</Label>
+                          <Input
+                            type="number"
+                            placeholder="Melee Resist %"
+                            value={formData.meleeResistance}
+                            onChange={(e) => setFormData({ ...formData, meleeResistance: parseInt(e.target.value) || 10 })}
+                            className="bg-gray-900 border-gray-600"
+                          />
+                        </div>
                         
-                        <Input
-                          type="number"
-                          placeholder="Magic Resist %"
-                          value={formData.magicResistance}
-                          onChange={(e) => setFormData({ ...formData, magicResistance: parseInt(e.target.value) || 10 })}
-                          className="bg-gray-900 border-gray-600"
-                        />
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Magic Resistance (%)</Label>
+                          <Input
+                            type="number"
+                            placeholder="Magic Resist %"
+                            value={formData.magicResistance}
+                            onChange={(e) => setFormData({ ...formData, magicResistance: parseInt(e.target.value) || 10 })}
+                            className="bg-gray-900 border-gray-600"
+                          />
+                        </div>
                       </div>
                     </>
                   )}
@@ -285,35 +313,44 @@ export function AdminPanel() {
                   {formData.type === 'ability' && (
                     <>
                       <div className="grid grid-cols-2 gap-4">
-                        <Input
-                          type="number"
-                          placeholder="Energy Cost"
-                          value={formData.cost}
-                          onChange={(e) => setFormData({ ...formData, cost: parseInt(e.target.value) || 0 })}
-                          className="bg-gray-900 border-gray-600"
-                        />
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Energy Cost</Label>
+                          <Input
+                            type="number"
+                            placeholder="Energy Cost"
+                            value={formData.cost}
+                            onChange={(e) => setFormData({ ...formData, cost: parseInt(e.target.value) || 0 })}
+                            className="bg-gray-900 border-gray-600"
+                          />
+                        </div>
                         
-                        <Select value={formData.spellType} onValueChange={(value: 'ranged' | 'melee' | 'magical' | 'combat' | 'other') => setFormData({ ...formData, spellType: value })}>
-                          <SelectTrigger className="bg-gray-900 border-gray-600">
-                            <SelectValue placeholder="Spell Type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="combat">Combat (Magic Damage)</SelectItem>
-                            <SelectItem value="ranged">Ranged</SelectItem>
-                            <SelectItem value="melee">Melee</SelectItem>
-                            <SelectItem value="magical">Magical</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div>
+                          <Label className="text-gray-300 text-sm mb-1 block">Spell Type</Label>
+                          <Select value={formData.spellType} onValueChange={(value: 'ranged' | 'melee' | 'magical' | 'combat' | 'other') => setFormData({ ...formData, spellType: value })}>
+                            <SelectTrigger className="bg-gray-900 border-gray-600">
+                              <SelectValue placeholder="Spell Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="combat">Combat (Magic Damage)</SelectItem>
+                              <SelectItem value="ranged">Ranged</SelectItem>
+                              <SelectItem value="melee">Melee</SelectItem>
+                              <SelectItem value="magical">Magical</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       
-                      <Textarea
-                        placeholder="Ability Description"
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        required
-                        className="bg-gray-900 border-gray-600"
-                      />
+                      <div>
+                        <Label className="text-gray-300 text-sm mb-1 block">Ability Description</Label>
+                        <Textarea
+                          placeholder="Ability Description"
+                          value={formData.description}
+                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          required
+                          className="bg-gray-900 border-gray-600"
+                        />
+                      </div>
                     </>
                   )}
 
@@ -365,6 +402,35 @@ export function AdminPanel() {
                     variant="destructive"
                   >
                     Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <h3 className="text-lg font-bold mt-6 mb-4 text-purple-400">Base Cards (Edit Only)</h3>
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {baseCards.map((card) => (
+              <div key={card.id} className="flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-purple-600">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-gray-600 rounded-lg flex items-center justify-center">
+                    <i className="fas fa-star text-purple-400 text-sm"></i>
+                  </div>
+                  <div>
+                    <div className="font-semibold">{card.name}</div>
+                    <div className="text-sm text-gray-400 capitalize">
+                      {card.type} {card.class && `- ${card.class}`}
+                    </div>
+                    <span className="text-xs text-purple-400">Base Card</span>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={() => handleEdit(card)}
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    Edit
                   </Button>
                 </div>
               </div>

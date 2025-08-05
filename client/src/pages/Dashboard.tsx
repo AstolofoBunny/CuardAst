@@ -37,7 +37,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
     setActiveTab(newTab);
     navigate(`/${newTab === 'ranking' ? '' : newTab}`);
   };
-  const { rooms, rankings, cards, createRoom, joinRoom, markPlayerReady, createTestRooms } = useFirestore();
+  const { rooms, rankings, cards, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms } = useFirestore();
   const [currentBattleId, setCurrentBattleId] = useState<string | null>(null);
   const [waitingForBattle, setWaitingForBattle] = useState(false);
   const [roomForm, setRoomForm] = useState({
@@ -96,10 +96,12 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
           // For PvE rooms, go directly to battle tab and start battle
           handleTabChange('battle');
           setCurrentBattleId(roomId);
+          setWaitingForBattle(false);
         } else {
           // For PvP rooms, go to battle tab and wait for opponent
           handleTabChange('battle');
           setWaitingForBattle(true);
+          setCurrentBattleId(null);
         }
       }
     } catch (error) {
@@ -115,9 +117,17 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
     }
     const success = await joinRoom(roomId, user!.uid);
     if (success) {
-      // Navigate to battle tab to join the battle
+      // Navigate to battle tab 
       handleTabChange('battle');
-      setWaitingForBattle(true);
+      // Check if room has battle ID to start battle or wait
+      const room = rooms.find(r => r.id === roomId);
+      if (room?.battleId) {
+        setCurrentBattleId(room.battleId);
+        setWaitingForBattle(false);
+      } else {
+        setWaitingForBattle(true);
+        setCurrentBattleId(null);
+      }
     }
   };
 
@@ -449,37 +459,55 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                           )}
                         </div>
                         
-                        <Button
-                          onClick={() => handleJoinRoom(room.id)}
-                          disabled={isGuest || room.status !== 'waiting' || (user ? room.players.includes(user.uid) : false)}
-                          className={`w-full font-bold py-3 transition-colors ${
-                            !isGuest && room.status === 'waiting' && (!user || !room.players.includes(user.uid))
-                              ? 'bg-red-600 hover:bg-red-700 text-white'
-                              : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          }`}
-                        >
-                          {isGuest ? (
-                            <>
-                              <i className="fas fa-lock mr-2"></i>
-                              Login Required
-                            </>
-                          ) : user && room.players.includes(user.uid) ? (
-                            <>
-                              <i className="fas fa-check mr-2"></i>
-                              Joined
-                            </>
-                          ) : room.status === 'waiting' ? (
-                            <>
-                              <i className="fas fa-sword mr-2"></i>
-                              Join Battle
-                            </>
-                          ) : (
-                            <>
-                              <i className="fas fa-eye mr-2"></i>
-                              Spectate
-                            </>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleJoinRoom(room.id)}
+                            disabled={isGuest || room.status !== 'waiting' || (user ? room.players.includes(user.uid) : false)}
+                            className={`flex-1 font-bold py-3 transition-colors ${
+                              !isGuest && room.status === 'waiting' && (!user || !room.players.includes(user.uid))
+                                ? 'bg-red-600 hover:bg-red-700 text-white'
+                                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                            }`}
+                          >
+                            {isGuest ? (
+                              <>
+                                <i className="fas fa-lock mr-2"></i>
+                                Login Required
+                              </>
+                            ) : user && room.players.includes(user.uid) ? (
+                              <>
+                                <i className="fas fa-check mr-2"></i>
+                                Joined
+                              </>
+                            ) : room.status === 'waiting' ? (
+                              <>
+                                <i className="fas fa-sword mr-2"></i>
+                                Join Battle
+                              </>
+                            ) : (
+                              <>
+                                <i className="fas fa-eye mr-2"></i>
+                                Spectate
+                              </>
+                            )}
+                          </Button>
+                          
+                          {/* Delete button for room hosts or admins */}
+                          {user && (user.uid === room.hostId || user.isAdmin) && (
+                            <Button
+                              onClick={async () => {
+                                if (confirm(`Delete room "${room.name}"?`)) {
+                                  await deleteRoom(room.id);
+                                }
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white px-3"
+                            >
+                              <i className="fas fa-times"></i>
+                            </Button>
                           )}
-                        </Button>
+                        </div>
                       </Card>
                     ))}
                   </div>

@@ -3,29 +3,16 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore } from '@/hooks/useFirestore';
 import { Link } from 'wouter';
 
 export default function Settings() {
   const { user, updateUserProfile, logout } = useAuth();
-  const { createCard } = useFirestore();
   const [isEditing, setIsEditing] = useState(false);
   const [profileForm, setProfileForm] = useState({
     displayName: user?.displayName || '',
-    email: user?.email || ''
-  });
-
-  const [cardForm, setCardForm] = useState({
-    name: '',
-    type: 'battle' as 'battle' | 'ability',
-    cost: 1,
-    attack: 1,
-    defense: 1,
-    description: '',
-    rarity: 'common' as 'common' | 'rare' | 'epic' | 'legendary',
-    classType: 'fire' as 'fire' | 'water' | 'earth' | 'air'
+    email: user?.email || '',
+    profilePicture: user?.profilePicture || ''
   });
 
   if (!user) {
@@ -52,33 +39,21 @@ export default function Settings() {
     }
   };
 
-  const handleCreateCard = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const cardData = {
-        ...cardForm,
-        imageUrl: `https://dummyimage.com/300x400/${
-          cardForm.classType === 'fire' ? 'ff4444' :
-          cardForm.classType === 'water' ? '4444ff' :
-          cardForm.classType === 'earth' ? '44aa44' : 'ffaa44'
-        }/ffffff&text=${encodeURIComponent(cardForm.name)}`,
-        isBase: false,
-        createdBy: user.uid
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // In a real app, you'd upload to a storage service
+      // For now, we'll use a placeholder URL
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setProfileForm({
+            ...profileForm,
+            profilePicture: event.target.result as string
+          });
+        }
       };
-      
-      await createCard(cardData);
-      setCardForm({
-        name: '',
-        type: 'battle',
-        cost: 1,
-        attack: 1,
-        defense: 1,
-        description: '',
-        rarity: 'common',
-        classType: 'fire'
-      });
-    } catch (error) {
-      console.error('Error creating card:', error);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -123,6 +98,37 @@ export default function Settings() {
           {isEditing ? (
             <form onSubmit={handleProfileUpdate} className="space-y-4">
               <div>
+                <Label htmlFor="profilePicture">Profile Picture</Label>
+                <div className="flex items-center space-x-4">
+                  <div className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center overflow-hidden">
+                    {profileForm.profilePicture ? (
+                      <img src={profileForm.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <i className="fas fa-user text-white text-xl"></i>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="profilePictureInput"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => document.getElementById('profilePictureInput')?.click()}
+                      variant="outline"
+                      className="border-gray-600"
+                    >
+                      <i className="fas fa-camera mr-2"></i>
+                      Choose Image
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
                 <Label htmlFor="displayName">Display Name</Label>
                 <Input
                   id="displayName"
@@ -131,6 +137,7 @@ export default function Settings() {
                   className="bg-gray-900 border-gray-600 focus:border-yellow-400"
                 />
               </div>
+              
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -143,7 +150,8 @@ export default function Settings() {
                 />
                 <p className="text-sm text-gray-400 mt-1">Email cannot be changed</p>
               </div>
-              <div className="flex space-x-2">
+
+              <div className="flex space-x-4">
                 <Button type="submit" className="bg-green-600 hover:bg-green-700">
                   <i className="fas fa-save mr-2"></i>
                   Save Changes
@@ -159,14 +167,20 @@ export default function Settings() {
             </form>
           ) : (
             <div className="space-y-4">
-              <div>
-                <Label>Display Name</Label>
-                <p className="text-lg">{user.displayName}</p>
+              <div className="flex items-center space-x-4 mb-6">
+                <div className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center overflow-hidden">
+                  {user.profilePicture ? (
+                    <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <i className="fas fa-user text-white text-xl"></i>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">{user.displayName}</h3>
+                  <p className="text-gray-400">{user.email}</p>
+                </div>
               </div>
-              <div>
-                <Label>Email</Label>
-                <p className="text-lg">{user.email}</p>
-              </div>
+
               <div>
                 <Label>Account Type</Label>
                 <p className="text-lg">
@@ -183,142 +197,70 @@ export default function Settings() {
                   )}
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Wins</Label>
-                  <p className="text-2xl font-bold text-green-400">{user.wins}</p>
-                </div>
-                <div>
-                  <Label>Losses</Label>
-                  <p className="text-2xl font-bold text-red-400">{user.losses}</p>
-                </div>
-              </div>
             </div>
           )}
         </Card>
 
-        {/* Admin Panel - Card Creation */}
-        {user.isAdmin && (
-          <Card className="bg-gray-800 border-purple-600 p-6">
-            <h2 className="text-2xl font-bold text-purple-400 mb-6">
-              <i className="fas fa-magic mr-2"></i>
-              Create New Card
-            </h2>
-            
-            <form onSubmit={handleCreateCard} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="cardName">Card Name</Label>
-                  <Input
-                    id="cardName"
-                    value={cardForm.name}
-                    onChange={(e) => setCardForm({ ...cardForm, name: e.target.value })}
-                    required
-                    className="bg-gray-900 border-gray-600 focus:border-purple-400"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cardType">Card Type</Label>
-                  <select
-                    id="cardType"
-                    value={cardForm.type}
-                    onChange={(e) => setCardForm({ ...cardForm, type: e.target.value as 'battle' | 'ability' })}
-                    className="w-full p-2 bg-gray-900 border border-gray-600 rounded focus:border-purple-400"
-                  >
-                    <option value="battle">Battle Unit</option>
-                    <option value="ability">Ability</option>
-                  </select>
-                </div>
+        {/* Game Statistics */}
+        <Card className="bg-gray-800 border-blue-600 p-6">
+          <h2 className="text-2xl font-bold text-yellow-400 mb-6">
+            <i className="fas fa-chart-bar mr-2"></i>
+            Game Statistics
+          </h2>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-gray-900 p-4 rounded-lg text-center">
+              <div className="text-3xl font-bold text-green-400">{user.wins}</div>
+              <div className="text-sm text-gray-400">Total Wins</div>
+            </div>
+            <div className="bg-gray-900 p-4 rounded-lg text-center">
+              <div className="text-3xl font-bold text-red-400">{user.losses}</div>
+              <div className="text-sm text-gray-400">Total Losses</div>
+            </div>
+            <div className="bg-gray-900 p-4 rounded-lg text-center">
+              <div className="text-3xl font-bold text-yellow-400">
+                {user.wins + user.losses > 0 ? Math.round((user.wins / (user.wins + user.losses)) * 100) : 0}%
               </div>
+              <div className="text-sm text-gray-400">Win Rate</div>
+            </div>
+            <div className="bg-gray-900 p-4 rounded-lg text-center">
+              <div className="text-3xl font-bold text-purple-400">{user.deck?.length || 0}</div>
+              <div className="text-sm text-gray-400">Cards in Deck</div>
+            </div>
+          </div>
+        </Card>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="cost">Cost</Label>
-                  <Input
-                    id="cost"
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={cardForm.cost}
-                    onChange={(e) => setCardForm({ ...cardForm, cost: parseInt(e.target.value) })}
-                    className="bg-gray-900 border-gray-600 focus:border-purple-400"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="attack">Attack</Label>
-                  <Input
-                    id="attack"
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={cardForm.attack}
-                    onChange={(e) => setCardForm({ ...cardForm, attack: parseInt(e.target.value) })}
-                    className="bg-gray-900 border-gray-600 focus:border-purple-400"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="defense">Defense</Label>
-                  <Input
-                    id="defense"
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={cardForm.defense}
-                    onChange={(e) => setCardForm({ ...cardForm, defense: parseInt(e.target.value) })}
-                    className="bg-gray-900 border-gray-600 focus:border-purple-400"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="rarity">Rarity</Label>
-                  <select
-                    id="rarity"
-                    value={cardForm.rarity}
-                    onChange={(e) => setCardForm({ ...cardForm, rarity: e.target.value as any })}
-                    className="w-full p-2 bg-gray-900 border border-gray-600 rounded focus:border-purple-400"
-                  >
-                    <option value="common">Common</option>
-                    <option value="rare">Rare</option>
-                    <option value="epic">Epic</option>
-                    <option value="legendary">Legendary</option>
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="classType">Class Type</Label>
-                  <select
-                    id="classType"
-                    value={cardForm.classType}
-                    onChange={(e) => setCardForm({ ...cardForm, classType: e.target.value as any })}
-                    className="w-full p-2 bg-gray-900 border border-gray-600 rounded focus:border-purple-400"
-                  >
-                    <option value="fire">Fire</option>
-                    <option value="water">Water</option>
-                    <option value="earth">Earth</option>
-                    <option value="air">Air</option>
-                  </select>
-                </div>
-              </div>
-
+        {/* Account Actions */}
+        <Card className="bg-gray-800 border-red-600 p-6">
+          <h2 className="text-2xl font-bold text-red-400 mb-6">
+            <i className="fas fa-exclamation-triangle mr-2"></i>
+            Account Actions
+          </h2>
+          
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-gray-900 rounded border border-red-600">
               <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={cardForm.description}
-                  onChange={(e) => setCardForm({ ...cardForm, description: e.target.value })}
-                  rows={3}
-                  className="bg-gray-900 border-gray-600 focus:border-purple-400"
-                />
+                <h3 className="font-bold text-red-400">Reset Game Progress</h3>
+                <p className="text-gray-400 text-sm">This will reset your wins, losses, and deck to default values</p>
               </div>
-
-              <Button type="submit" className="bg-purple-600 hover:bg-purple-700">
-                <i className="fas fa-plus mr-2"></i>
-                Create Card
+              <Button variant="destructive" size="sm">
+                <i className="fas fa-refresh mr-2"></i>
+                Reset
               </Button>
-            </form>
-          </Card>
-        )}
+            </div>
+            
+            <div className="flex items-center justify-between p-4 bg-gray-900 rounded border border-red-600">
+              <div>
+                <h3 className="font-bold text-red-400">Delete Account</h3>
+                <p className="text-gray-400 text-sm">Permanently delete your account and all associated data</p>
+              </div>
+              <Button variant="destructive" size="sm">
+                <i className="fas fa-trash mr-2"></i>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );

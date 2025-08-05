@@ -109,6 +109,7 @@ export interface Room {
   maxPlayers: number;
   status: 'waiting' | 'active' | 'finished';
   description?: string;
+  battleId?: string;
   createdAt: number;
 }
 

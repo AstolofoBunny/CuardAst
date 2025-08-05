@@ -494,6 +494,31 @@ export function useFirestore() {
     return () => clearInterval(cleanup);
   }, []);
 
+  const deleteRoom = async (roomId: string) => {
+    try {
+      // Find the room and delete associated battle if exists
+      const room = rooms.find(r => r.id === roomId);
+      if (room?.battleId) {
+        await deleteDoc(doc(db, 'battles', room.battleId));
+      }
+      
+      await deleteDoc(doc(db, 'rooms', roomId));
+      toast({
+        title: "Success",
+        description: "Room deleted successfully!"
+      });
+      return true;
+    } catch (error) {
+      console.error('Error deleting room:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to delete room",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
   return {
     cards,
     rooms,
@@ -501,6 +526,7 @@ export function useFirestore() {
     loading,
     createRoom,
     joinRoom,
+    deleteRoom,
     markPlayerReady,
     createCard,
     updateCard,
