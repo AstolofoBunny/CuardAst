@@ -199,8 +199,8 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 value="rooms"
                 className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
               >
-                <i className="fas fa-users mr-3"></i>
-                Battle Rooms
+                <i className="fas fa-search mr-3"></i>
+                Find Room
               </TabsTrigger>
               <TabsTrigger
                 value="cards"
@@ -221,6 +221,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 value="current-room"
                 disabled={!currentRoomId}
                 className={`w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white ${!currentRoomId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                style={{ display: currentRoom && currentRoom.type === 'pvp' ? 'flex' : 'none' }}
               >
                 <i className="fas fa-door-open mr-3"></i>
                 Current Room {!currentRoomId && '(Create Room First)'}
@@ -247,9 +248,102 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 bg-gray-900">
+        <div className="flex-1 bg-gray-900 flex flex-col">
+          <div className="flex-1">
+            {/* General Chat */}
+            <div className="fixed bottom-4 left-4 w-80 bg-gray-800 border border-blue-600 rounded-lg shadow-lg z-50">
+              <div className="bg-blue-900 text-white p-3 rounded-t-lg">
+                <h4 className="font-bold text-sm">
+                  <i className="fas fa-comments mr-2"></i>
+                  General Chat
+                </h4>
+              </div>
+              
+              <div className="h-32 overflow-y-auto p-2 bg-gray-900 text-xs">
+                <div className="text-gray-400 mb-1">
+                  <span className="text-blue-400">[System]</span> Welcome to Battle Arena!
+                </div>
+                <div className="text-gray-400 mb-1">
+                  <span className="text-green-400">[Player123]</span> Looking for opponents!
+                </div>
+                <div className="text-gray-400 mb-1">
+                  <span className="text-red-400">[Warrior99]</span> Anyone want to battle?
+                </div>
+              </div>
+              
+              <div className="p-2 bg-gray-800 rounded-b-lg">
+                <div className="flex space-x-1">
+                  <Input
+                    placeholder={isGuest ? "Login to chat" : "Type message..."}
+                    disabled={isGuest}
+                    className="flex-1 h-8 text-xs bg-gray-700 border-gray-600 text-white"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={isGuest}
+                    className="h-8 px-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600"
+                  >
+                    <i className="fas fa-paper-plane text-xs"></i>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="w-full">
             {/* Render content based on active tab */}
+            {activeTab === 'battle' && !currentRoom && (
+              <div>
+                <div className="p-6">
+                  <div className="mb-6">
+                    <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                      <i className="fas fa-sword mr-2"></i>
+                      Battle Arena
+                    </h2>
+                    <p className="text-gray-400">Choose your action to start battling</p>
+                  </div>
+
+                  <Card className="bg-gray-800 border-blue-600 p-8 text-center">
+                    <div className="mb-6">
+                      <div className="w-20 h-20 bg-gray-700 rounded-full mx-auto mb-4 flex items-center justify-center">
+                        <i className="fas fa-swords text-yellow-400 text-3xl"></i>
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-400 mb-2">Ready for Action</h3>
+                      <p className="text-gray-500">Choose how you want to battle!</p>
+                    </div>
+                    
+                    <div className="flex justify-center space-x-4">
+                      <Button
+                        onClick={() => handleTabChange('rooms')}
+                        className="bg-blue-600 hover:bg-blue-700 px-6 py-3"
+                      >
+                        <i className="fas fa-search mr-2"></i>
+                        Find Room
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange('create-room')}
+                        disabled={isGuest}
+                        className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-6 py-3"
+                      >
+                        <i className="fas fa-plus mr-2"></i>
+                        Create Room
+                      </Button>
+                      <Button
+                        onClick={() => handleTabChange('current-room')}
+                        disabled={!currentRoomId}
+                        className={`px-6 py-3 ${!currentRoomId 
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
+                          : 'bg-purple-600 hover:bg-purple-700'
+                        }`}
+                      >
+                        <i className="fas fa-door-open mr-2"></i>
+                        Current Room
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'battle' && currentRoom && (
               <div>
                 <div className="p-6">
