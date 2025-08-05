@@ -8,7 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore } from '@/hooks/useFirestore';
 import { DeckBuilder } from '@/components/DeckBuilder';
-import { BattleInterface } from '@/components/BattleInterface';
+// import { BattleInterface } from '@/components/BattleInterface'; // Removed old battle system
 import { AdminPanel } from '@/components/AdminPanel';
 import { AuthModal } from '@/components/AuthModal';
 import { CardsGrid } from '@/components/CardsGrid';
@@ -38,8 +38,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
     navigate(`/${newTab === 'ranking' ? '' : newTab}`);
   };
   const { rooms, rankings, cards, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms } = useFirestore();
-  const [currentBattleId, setCurrentBattleId] = useState<string | null>(null);
-  const [waitingForBattle, setWaitingForBattle] = useState(false);
+  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
   const [roomForm, setRoomForm] = useState({
     name: '',
     type: 'pvp' as 'pvp' | 'pve',
@@ -62,14 +61,8 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
 
   const isGuest = !user;
 
-  if (currentBattleId) {
-    return (
-      <BattleInterface
-        battleId={currentBattleId}
-        onLeaveBattle={() => setCurrentBattleId(null)}
-      />
-    );
-  }
+  // Get current room data if user is in a room
+  const currentRoom = currentRoomId ? rooms.find(r => r.id === currentRoomId) : null;
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,23 +84,14 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
       const roomId = await createRoom(roomData);
       if (roomId) {
         setRoomForm({ name: '', type: 'pvp', description: '' });
+        setCurrentRoomId(roomId);
         
         if (roomForm.type === 'pve') {
-          // For PvE rooms, go directly to battle tab and start battle
+          // For PvE rooms, go directly to secret battle tab
           handleTabChange('battle');
-          // Wait for the battle to be created by the createRoom function
-          setTimeout(() => {
-            const createdRoom = rooms.find(r => r.id === roomId);
-            if (createdRoom?.battleId) {
-              setCurrentBattleId(createdRoom.battleId);
-              setWaitingForBattle(false);
-            }
-          }, 2000); // Increase timeout to allow battle creation
         } else {
-          // For PvP rooms, go to battle tab and wait for opponent
-          handleTabChange('battle');
-          setWaitingForBattle(true);
-          setCurrentBattleId(null);
+          // For PvP rooms, go to current room tab to wait for opponent
+          handleTabChange('current-room');
         }
       }
     } catch (error) {
@@ -123,19 +107,15 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
     }
     const success = await joinRoom(roomId, user!.uid);
     if (success) {
-      // Navigate to battle tab 
-      handleTabChange('battle');
-      // Wait a moment for the room to be updated with battleId
-      setTimeout(() => {
-        const room = rooms.find(r => r.id === roomId);
-        if (room?.battleId) {
-          setCurrentBattleId(room.battleId);
-          setWaitingForBattle(false);
-        } else {
-          setWaitingForBattle(true);
-          setCurrentBattleId(null);
-        }
-      }, 500);
+      setCurrentRoomId(roomId);
+      const room = rooms.find(r => r.id === roomId);
+      if (room?.type === 'pve') {
+        // For PvE rooms, go directly to battle tab
+        handleTabChange('battle');
+      } else {
+        // For PvP rooms, go to current room tab
+        handleTabChange('current-room');
+      }
     }
   };
 
@@ -238,6 +218,14 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 My Deck {isGuest && '(Login Required)'}
               </TabsTrigger>
               <TabsTrigger
+                value="current-room"
+                disabled={!currentRoomId}
+                className={`w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white ${!currentRoomId ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <i className="fas fa-door-open mr-3"></i>
+                Current Room {!currentRoomId && '(Create Room First)'}
+              </TabsTrigger>
+              <TabsTrigger
                 value="create-room"
                 disabled={isGuest}
                 className={`w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white ${isGuest ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -262,7 +250,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
         <div className="flex-1 bg-gray-900">
           <div className="w-full">
             {/* Render content based on active tab */}
-            {activeTab === 'battle' && (
+            {activeTab === 'battle' && currentRoom && (
               <div>
                 <div className="p-6">
                   <div className="mb-6">
@@ -270,82 +258,160 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                       <i className="fas fa-sword mr-2"></i>
                       Battle Arena
                     </h2>
-                    <p className="text-gray-400">Engage in epic battles</p>
+                    <p className="text-gray-400">Room: {currentRoom.name}</p>
                   </div>
 
-                  {currentBattleId ? (
-                    <BattleInterface
-                      battleId={currentBattleId}
-                      onLeaveBattle={() => {
-                        setCurrentBattleId(null);
-                        setWaitingForBattle(false);
-                        handleTabChange('ranking');
-                      }}
-                    />
-                  ) : waitingForBattle ? (
-                    <Card className="bg-gray-800 border-blue-600 p-8 text-center">
-                      <div className="mb-6">
-                        <div className="animate-pulse rounded-full h-20 w-20 bg-yellow-400 mx-auto mb-4 flex items-center justify-center">
-                          <i className="fas fa-hourglass-half text-gray-900 text-2xl"></i>
-                        </div>
-                        <h3 className="text-2xl font-bold text-yellow-400 mb-2">Waiting for Opponent</h3>
-                        <p className="text-gray-400">Looking for another player to join the battle...</p>
+                  <Card className="bg-gray-800 border-red-600 p-8">
+                    <div className="text-center mb-8">
+                      <div className="w-full h-96 bg-gradient-to-b from-blue-900 to-green-900 rounded-lg mb-6 flex items-center justify-center border-2 border-yellow-400">
+                        <div className="text-4xl font-bold text-yellow-400">BATTLEFIELD IMAGE PLACEHOLDER</div>
                       </div>
+                    </div>
+
+                    {/* Player 1 Cards (Bottom) */}
+                    <div className="mb-6">
+                      <h3 className="text-lg font-bold text-blue-400 mb-3">Your Hand</h3>
+                      <div className="flex space-x-2 justify-center">
+                        {[1, 2, 3, 4, 5].map((card) => (
+                          <div key={card} className="w-16 h-24 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center cursor-pointer hover:bg-blue-500">
+                            <span className="text-xs font-bold">{card}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Battlefield Slots */}
+                    <div className="grid grid-cols-2 gap-8 mb-6">
+                      {/* Player 1 Battlefield */}
+                      <div>
+                        <h4 className="text-blue-400 font-bold mb-2">Your Battlefield</h4>
+                        <div className="flex space-x-2">
+                          {[1, 2, 3].map((slot) => (
+                            <div key={slot} className="w-16 h-24 bg-gray-700 rounded border-2 border-gray-500 flex items-center justify-center">
+                              <span className="text-xs text-gray-400">Slot {slot}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Player 2 Battlefield */}
+                      <div>
+                        <h4 className="text-red-400 font-bold mb-2">Opponent Battlefield</h4>
+                        <div className="flex space-x-2">
+                          {[1, 2, 3].map((slot) => (
+                            <div key={slot} className="w-16 h-24 bg-gray-700 rounded border-2 border-gray-500 flex items-center justify-center">
+                              <span className="text-xs text-gray-400">Slot {slot}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Player 2 Cards (Top) */}
+                    <div>
+                      <h3 className="text-lg font-bold text-red-400 mb-3">Opponent Hand</h3>
+                      <div className="flex space-x-2 justify-center">
+                        {[1, 2, 3, 4, 5].map((card) => (
+                          <div key={card} className="w-16 h-24 bg-red-600 rounded border-2 border-red-400 flex items-center justify-center">
+                            <span className="text-xs font-bold">?</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 text-center">
+                      <Button
+                        onClick={() => {
+                          setCurrentRoomId(null);
+                          handleTabChange('ranking');
+                        }}
+                        variant="destructive"
+                      >
+                        <i className="fas fa-door-open mr-2"></i>
+                        Leave Battle
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'current-room' && currentRoom && (
+              <div>
+                <div className="p-6">
+                  <div className="mb-6">
+                    <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                      <i className="fas fa-door-open mr-2"></i>
+                      Current Room
+                    </h2>
+                    <p className="text-gray-400">Room: {currentRoom.name}</p>
+                  </div>
+
+                  <Card className="bg-gray-800 border-blue-600 p-8">
+                    <div className="text-center mb-8">
+                      <h3 className="text-2xl font-bold text-blue-400 mb-4">Room: {currentRoom.name}</h3>
+                      <p className="text-gray-400 mb-6">{currentRoom.description}</p>
                       
-                      <div className="space-y-4">
-                        <div className="flex justify-center space-x-4">
+                      <div className="grid grid-cols-2 gap-6 max-w-md mx-auto">
+                        {/* Host Player */}
+                        <div className="bg-gray-700 rounded-lg p-4">
+                          <div className="w-16 h-16 bg-blue-600 rounded-full mx-auto mb-3 flex items-center justify-center">
+                            <i className="fas fa-crown text-yellow-400 text-xl"></i>
+                          </div>
+                          <h4 className="font-bold text-blue-400">{currentRoom.hostName}</h4>
+                          <p className="text-sm text-gray-400">Host</p>
+                        </div>
+
+                        {/* Second Player or Waiting */}
+                        <div className="bg-gray-700 rounded-lg p-4">
+                          {currentRoom.players.length > 1 ? (
+                            <>
+                              <div className="w-16 h-16 bg-red-600 rounded-full mx-auto mb-3 flex items-center justify-center">
+                                <i className="fas fa-user text-white text-xl"></i>
+                              </div>
+                              <h4 className="font-bold text-red-400">Player 2</h4>
+                              <p className="text-sm text-gray-400">Ready</p>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-16 h-16 bg-gray-600 rounded-full mx-auto mb-3 flex items-center justify-center animate-pulse">
+                                <i className="fas fa-hourglass-half text-gray-400 text-xl"></i>
+                              </div>
+                              <h4 className="font-bold text-gray-400">Waiting...</h4>
+                              <p className="text-sm text-gray-500">For opponent</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {currentRoom.players.length >= 2 && (
+                        <div className="mt-8">
                           <Button
-                            onClick={() => setWaitingForBattle(false)}
-                            variant="outline"
-                            className="border-gray-600 text-gray-300 hover:bg-gray-700"
-                          >
-                            <i className="fas fa-arrow-left mr-2"></i>
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              // Start battle function would go here
-                              // For now, simulate starting battle
-                              setWaitingForBattle(false);
-                              setCurrentBattleId('demo-battle-' + Date.now());
-                            }}
-                            className="bg-red-600 hover:bg-red-700"
+                            onClick={() => handleTabChange('battle')}
+                            size="lg"
+                            className="bg-red-600 hover:bg-red-700 text-xl px-8 py-3"
                           >
                             <i className="fas fa-play mr-2"></i>
-                            Start Battle
+                            START BATTLE
                           </Button>
                         </div>
-                      </div>
-                    </Card>
-                  ) : (
-                    <Card className="bg-gray-800 border-blue-600 p-8 text-center">
-                      <div className="mb-6">
-                        <div className="w-20 h-20 bg-gray-700 rounded-full mx-auto mb-4 flex items-center justify-center">
-                          <i className="fas fa-peace text-gray-500 text-3xl"></i>
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-400 mb-2">No Active Battle</h3>
-                        <p className="text-gray-500">Create or join a room to start battling!</p>
-                      </div>
-                      
-                      <div className="flex justify-center space-x-4">
+                      )}
+
+                      <div className="mt-6">
                         <Button
-                          onClick={() => handleTabChange('create-room')}
-                          disabled={isGuest}
-                          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600"
+                          onClick={() => {
+                            setCurrentRoomId(null);
+                            handleTabChange('ranking');
+                          }}
+                          variant="outline"
+                          className="border-gray-600 text-gray-300 hover:bg-gray-700"
                         >
-                          <i className="fas fa-plus mr-2"></i>
-                          Create Room
-                        </Button>
-                        <Button
-                          onClick={() => handleTabChange('rooms')}
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          <i className="fas fa-search mr-2"></i>
-                          Find Battle
+                          <i className="fas fa-arrow-left mr-2"></i>
+                          Leave Room
                         </Button>
                       </div>
-                    </Card>
-                  )}
+                    </div>
+                  </Card>
                 </div>
               </div>
             )}
