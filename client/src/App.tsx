@@ -26,7 +26,14 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/" component={() => <Dashboard user={user} />} />
+      <Route path="/" component={() => <Dashboard user={user} activeTab="ranking" />} />
+      <Route path="/ranking" component={() => <Dashboard user={user} activeTab="ranking" />} />
+      <Route path="/battle" component={() => <Dashboard user={user} activeTab="battle" />} />
+      <Route path="/rooms" component={() => <Dashboard user={user} activeTab="rooms" />} />
+      <Route path="/cards" component={() => <Dashboard user={user} activeTab="cards" />} />
+      <Route path="/deck" component={() => <Dashboard user={user} activeTab="deck" />} />
+      <Route path="/create-room" component={() => <Dashboard user={user} activeTab="create-room" />} />
+      <Route path="/admin" component={() => <Dashboard user={user} activeTab="admin" />} />
       <Route path="/settings" component={() => <Settings />} />
       <Route component={NotFound} />
     </Switch>

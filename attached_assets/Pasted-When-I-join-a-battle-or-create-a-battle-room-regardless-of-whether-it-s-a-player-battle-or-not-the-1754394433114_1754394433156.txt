@@ -1,0 +1,44 @@
+When I join a battle or create a battle room, regardless of whether it's a player battle or not, the battle tab still shows "No Active Battle — Create or join a room to start battling!" instead of the correct status.
+
+Whenever you save, for example, a card deck, create a room, or do something else, it unnecessarily redirects you to the rating tab. I think this happens because all these tabs are under the same page and their URL doesn't change when switching between them. Probably, each tab should behave like a separate page with its own URL so that it stays on the correct tab, otherwise it keeps switching back to the rating tab.
+
+You can remove the card creation feature from the profile section because it is unnecessary there. But in the admin panel on the left, where cards can be created, improve it a bit. Instead of writing passive ability descriptions for cards manually, it would be better to have a selection of different basic passives that act as the description image. That is, when creating a card, the admin chooses from a list of basic passive abilities, and they will actually work in battle, not just be text. And for battle cards, there should be one set of passives, and for spell cards — another set to choose from.
+
+3.1. Create a separate tab called "cards" that lists all cards, and when you click on a card, you enter its full details view. It should show all characteristics, including hidden ones like critical chance, critical damage, magical elements.
+
+By the way, I want to establish a clear list of card stats, and then you can double-check it. If any stats are missing, add them and update every card accordingly, and also include these stats in battle mechanics.
+
+Here are the stats for battle cards:
+
+Health
+
+Attack
+
+Defense: reduces damage from enemies
+
+Hidden stats for battle cards, visible in the "cards" tab for each card:
+
+Critical Chance: chance to trigger critical damage on each attack; this value is shown here
+
+Critical Damage: default is 50%; if critical chance triggers, this stat increases the damage dealt
+
+Card type for battle cards: ranged, melee, mage — you already know how this affects gameplay
+
+Resistance to ranged attacks: default is 10% for all except mages, who have 20%
+
+Resistance to melee attacks: 20% for archers, 10% for others
+
+Resistance to magic: 20% for warriors, 10% for others
+
+Magical card type
+For spells, specify how much energy the spell consumes.
+
+From a list, select which passive abilities this card grants (from a standard list of passives). You can also choose two passives at once (optional), so the card will perform both abilities when used.
+
+Also, let's create spell types for magical cards that deal damage.
+
+If the spell does not deal damage, select the type "other."
+
+If it does deal damage, the options are the same as for battle cards: ranged, melee, magical.
+
+This affects how much damage the target card can absorb based on its resistance to the type of damage the spell card deals.

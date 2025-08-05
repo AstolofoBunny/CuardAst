@@ -10,6 +10,27 @@ The application combines a React frontend with an Express.js backend, using Fire
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (January 2025)
+
+### Major System Updates
+- **Enhanced Card System**: Implemented comprehensive card statistics including attack, defense, health, critical chance/damage, and element-based resistances
+- **URL-Based Navigation**: Fixed tab persistence issues by implementing proper routing with wouter - each tab now has its own URL
+- **Cards Collection Tab**: Added dedicated cards browser with detailed card information, filtering, and modal detail views
+- **Battle Flow Improvements**: Fixed battle tab navigation to properly handle PvP waiting states and PvE direct battles
+- **Admin Panel Enhancements**: Updated card creation system to use structured passive abilities instead of manual descriptions
+
+### Card Statistics System
+- **Battle Cards**: Health, Attack, Defense, Critical Chance/Damage, Class-based resistances (ranged/melee/magic)
+- **Spell Cards**: Energy cost, spell type classification (ranged/melee/magical/other)
+- **Passive Abilities**: Standardized system with selectable effects for consistent battle mechanics
+- **Detailed Views**: Complete card information including hidden stats visible in Cards tab
+
+### Navigation & UX Fixes
+- **URL Persistence**: Tabs maintain state across page refreshes and browser navigation
+- **Battle Tab Logic**: Proper state management for active battles vs waiting states vs empty states
+- **Deck Builder**: Now shows success notifications instead of redirecting away from the tab
+- **Room Creation**: Automatically navigates to appropriate battle states (waiting for PvP, direct battle for PvE)
+
 ## System Architecture
 
 ### Frontend Architecture

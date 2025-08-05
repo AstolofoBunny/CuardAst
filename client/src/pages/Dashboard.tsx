@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,17 +11,32 @@ import { DeckBuilder } from '@/components/DeckBuilder';
 import { BattleInterface } from '@/components/BattleInterface';
 import { AdminPanel } from '@/components/AdminPanel';
 import { AuthModal } from '@/components/AuthModal';
+import { CardsGrid } from '@/components/CardsGrid';
 import { Room } from '@/types/game';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 
 interface DashboardProps {
   user: any;
+  activeTab?: string;
 }
 
-export default function Dashboard({ user }: DashboardProps) {
+export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: DashboardProps) {
   const { logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('ranking');
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [location, navigate] = useLocation();
+
+  // Update active tab based on URL
+  useEffect(() => {
+    const path = location.split('/')[1] || 'ranking';
+    setActiveTab(path);
+  }, [location]);
+
+  // Handle tab changes with navigation
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    navigate(`/${newTab === 'ranking' ? '' : newTab}`);
+  };
   const { rooms, rankings, createRoom, joinRoom, markPlayerReady, createTestRooms } = useFirestore();
   const [currentBattleId, setCurrentBattleId] = useState<string | null>(null);
   const [waitingForBattle, setWaitingForBattle] = useState(false);
@@ -79,11 +94,11 @@ export default function Dashboard({ user }: DashboardProps) {
         
         if (roomForm.type === 'pve') {
           // For PvE rooms, go directly to battle tab and start battle
-          setActiveTab('battle');
+          handleTabChange('battle');
           setCurrentBattleId(roomId);
         } else {
           // For PvP rooms, go to battle tab and wait for opponent
-          setActiveTab('battle');
+          handleTabChange('battle');
           setWaitingForBattle(true);
         }
       }
@@ -101,7 +116,7 @@ export default function Dashboard({ user }: DashboardProps) {
     const success = await joinRoom(roomId, user!.uid);
     if (success) {
       // Navigate to battle tab to join the battle
-      setActiveTab('battle');
+      handleTabChange('battle');
       setWaitingForBattle(true);
     }
   };
@@ -166,7 +181,7 @@ export default function Dashboard({ user }: DashboardProps) {
       <div className="flex">
         {/* Sidebar */}
         <div className="w-64 bg-gray-800 border-r border-blue-600 min-h-screen">
-          <Tabs defaultValue="ranking" className="w-full" orientation="vertical" value={activeTab} onValueChange={setActiveTab}>
+          <Tabs defaultValue="ranking" className="w-full" orientation="vertical" value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="flex flex-col h-auto bg-transparent p-4 space-y-2">
               <TabsTrigger
                 value="ranking"
@@ -188,6 +203,13 @@ export default function Dashboard({ user }: DashboardProps) {
               >
                 <i className="fas fa-users mr-3"></i>
                 Battle Rooms
+              </TabsTrigger>
+              <TabsTrigger
+                value="cards"
+                className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
+              >
+                <i className="fas fa-cards-blank mr-3"></i>
+                Cards
               </TabsTrigger>
               <TabsTrigger
                 value="deck"
@@ -239,7 +261,7 @@ export default function Dashboard({ user }: DashboardProps) {
                       onLeaveBattle={() => {
                         setCurrentBattleId(null);
                         setWaitingForBattle(false);
-                        setActiveTab('ranking');
+                        handleTabChange('ranking');
                       }}
                     />
                   ) : waitingForBattle ? (
@@ -289,7 +311,7 @@ export default function Dashboard({ user }: DashboardProps) {
                       
                       <div className="flex justify-center space-x-4">
                         <Button
-                          onClick={() => setActiveTab('create-room')}
+                          onClick={() => handleTabChange('create-room')}
                           disabled={isGuest}
                           className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600"
                         >
@@ -297,7 +319,7 @@ export default function Dashboard({ user }: DashboardProps) {
                           Create Room
                         </Button>
                         <Button
-                          onClick={() => setActiveTab('rooms')}
+                          onClick={() => handleTabChange('rooms')}
                           className="bg-blue-600 hover:bg-blue-700"
                         >
                           <i className="fas fa-search mr-2"></i>
@@ -463,6 +485,11 @@ export default function Dashboard({ user }: DashboardProps) {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Cards Tab */}
+            {activeTab === 'cards' && (
+              <CardsGrid cards={cards} />
             )}
 
             {/* Deck Tab */}
