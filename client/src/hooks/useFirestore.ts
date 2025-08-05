@@ -108,8 +108,9 @@ export function useFirestore() {
           return {
             uid: doc.id,
             displayName: data.displayName,
-            wins: data.wins,
-            losses: data.losses,
+            profilePicture: data.profilePicture,
+            wins: data.wins || 0,
+            losses: data.losses || 0,
             winRate: data.wins + data.losses > 0 ? Math.round((data.wins / (data.wins + data.losses)) * 100) : 0
           };
         }) as RankingEntry[];

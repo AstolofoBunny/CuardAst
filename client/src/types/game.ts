@@ -115,25 +115,29 @@ export interface Room {
 }
 
 export interface Battle {
-  id: string;
+  id?: string;
   roomId: string;
   players: {
     [playerId: string]: {
-      name: string;
+      uid: string;
+      displayName: string;
       hp: number;
       energy: number;
-      selectedBattleCard?: string;
-      selectedAbilities: string[];
-      isReady: boolean;
       deck: string[];
+      hand: string[];
+      battlefield: string[];
+      selectedBattleCard?: string;
+      selectedAbilities?: string[];
+      isReady: boolean;
     };
   };
-  round: number;
-  currentTurn?: string;
-  status: 'active' | 'finished';
+  currentTurn: string;
+  phase: 'preparation' | 'battle' | 'finished';
+  status: 'active' | 'waiting_for_ready' | 'finished';
+  readyCount?: number;
   winner?: string;
   createdAt: number;
-  history: BattleAction[];
+  history?: BattleAction[];
 }
 
 export interface BattleAction {
@@ -148,6 +152,7 @@ export interface BattleAction {
 export interface RankingEntry {
   uid: string;
   displayName: string;
+  profilePicture?: string;
   wins: number;
   losses: number;
   winRate: number;

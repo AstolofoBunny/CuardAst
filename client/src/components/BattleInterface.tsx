@@ -52,12 +52,39 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
   const opponentId = Object.keys(battle.players).find(id => id !== user.uid);
   const opponentData = opponentId ? battle.players[opponentId] : null;
 
-  if (!playerData || !opponentData) {
+  if (!playerData) {
     return (
       <div className="p-6 text-center">
-        <p className="text-lg">Battle data not found</p>
+        <p className="text-lg">Joining battle...</p>
         <Button onClick={onLeaveBattle} className="mt-4">Return to Dashboard</Button>
       </div>
+    );
+  }
+
+  if (!opponentData && battle.phase === 'preparation') {
+    return (
+      <Card className="bg-gray-800 border-blue-600 p-8 text-center">
+        <div className="mb-6">
+          <div className="animate-pulse rounded-full h-20 w-20 bg-yellow-400 mx-auto mb-4 flex items-center justify-center">
+            <i className="fas fa-hourglass-half text-gray-900 text-2xl"></i>
+          </div>
+          <h3 className="text-2xl font-bold text-yellow-400 mb-2">Waiting for Opponent</h3>
+          <p className="text-gray-400">Looking for another player to join the battle...</p>
+        </div>
+        
+        <div className="space-y-4">
+          <div className="flex justify-center space-x-4">
+            <Button
+              onClick={onLeaveBattle}
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+            >
+              <i className="fas fa-arrow-left mr-2"></i>
+              Leave Battle
+            </Button>
+          </div>
+        </div>
+      </Card>
     );
   }
 
@@ -94,7 +121,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
   };
 
   const handleReady = async () => {
-    if (!battle || !user || !selectedBattleCard) return;
+    if (!battle || !user || !selectedBattleCard || !battleId) return;
 
     const updatedBattle = {
       ...battle,
@@ -103,20 +130,20 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
         [user.uid]: {
           ...playerData,
           selectedBattleCard,
-          selectedAbilities,
+          selectedAbilities: selectedAbilities || [],
           isReady: true
         }
       }
     };
 
-    await updateBattle(battle.id, updatedBattle);
+    await updateBattle(battleId, updatedBattle);
     setIsReady(true);
   };
 
   const playerHPPercent = (playerData.hp / 20) * 100;
   const playerEnergyPercent = (playerData.energy / 100) * 100;
-  const opponentHPPercent = (opponentData.hp / 20) * 100;
-  const opponentEnergyPercent = (opponentData.energy / 100) * 100;
+  const opponentHPPercent = opponentData ? (opponentData.hp / 20) * 100 : 0;
+  const opponentEnergyPercent = opponentData ? (opponentData.energy / 100) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
@@ -126,7 +153,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-red-400">
               <i className="fas fa-swords mr-2"></i>
-              Battle Arena - Round {battle.round}
+              Battle Arena - {battle.phase}
             </h1>
             <Button 
               onClick={onLeaveBattle}
@@ -183,13 +210,13 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
             {/* Opponent (Right Side) */}
             <div className="flex items-center space-x-6">
               <div className="text-right">
-                <h3 className="text-xl font-bold text-red-400">{opponentData.name || 'Opponent'}</h3>
-                <div className={`text-sm mb-3 ${opponentData.isReady ? 'text-green-400' : 'text-yellow-400'}`}>
-                  {opponentData.isReady ? '✓ Ready' : 'Selecting cards...'}
+                <h3 className="text-xl font-bold text-red-400">{opponentData?.displayName || 'Opponent'}</h3>
+                <div className={`text-sm mb-3 ${opponentData?.isReady ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {opponentData?.isReady ? '✓ Ready' : 'Selecting cards...'}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center space-x-3">
-                    <span className="text-sm font-bold min-w-12">{opponentData.hp}/20</span>
+                    <span className="text-sm font-bold min-w-12">{opponentData?.hp || 0}/20</span>
                     <div className="w-32 bg-gray-700 rounded-full h-4">
                       <div 
                         className="bg-red-500 h-4 rounded-full transition-all duration-500"
@@ -199,7 +226,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                     <i className="fas fa-heart text-red-400"></i>
                   </div>
                   <div className="flex items-center space-x-3">
-                    <span className="text-sm font-bold min-w-16">{opponentData.energy}/100</span>
+                    <span className="text-sm font-bold min-w-16">{opponentData?.energy || 0}/100</span>
                     <div className="w-32 bg-gray-700 rounded-full h-4">
                       <div 
                         className="bg-yellow-500 h-4 rounded-full transition-all duration-500"

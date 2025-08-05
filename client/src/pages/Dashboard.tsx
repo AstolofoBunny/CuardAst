@@ -95,18 +95,14 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
         if (roomForm.type === 'pve') {
           // For PvE rooms, go directly to battle tab and start battle
           handleTabChange('battle');
-          // Wait a moment for the room to be created with battleId
+          // Wait for the battle to be created by the createRoom function
           setTimeout(() => {
             const createdRoom = rooms.find(r => r.id === roomId);
             if (createdRoom?.battleId) {
               setCurrentBattleId(createdRoom.battleId);
               setWaitingForBattle(false);
-            } else {
-              // Fallback: use roomId as battleId for PvE
-              setCurrentBattleId(roomId);
-              setWaitingForBattle(false);
             }
-          }, 1000);
+          }, 2000); // Increase timeout to allow battle creation
         } else {
           // For PvP rooms, go to battle tab and wait for opponent
           handleTabChange('battle');
@@ -389,8 +385,16 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                               </div>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center">
-                                <i className="fas fa-user text-sm"></i>
+                              <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center overflow-hidden">
+                                {player.profilePicture ? (
+                                  <img 
+                                    src={player.profilePicture} 
+                                    alt={player.displayName} 
+                                    className="w-full h-full object-cover" 
+                                  />
+                                ) : (
+                                  <i className="fas fa-user text-sm"></i>
+                                )}
                               </div>
                               <span className="font-semibold">{player.displayName}</span>
                             </div>
