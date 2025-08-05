@@ -28,7 +28,7 @@ export function AdminPanel() {
     meleeResistance: 10,
     magicResistance: 10,
     cost: 0,
-    spellType: 'other' as 'ranged' | 'melee' | 'magical' | 'other',
+    spellType: 'other' as 'ranged' | 'melee' | 'magical' | 'combat' | 'other',
     imageUrl: '',
     description: '',
     passiveAbilities: [] as string[]
@@ -221,31 +221,91 @@ export function AdminPanel() {
                         
                         <Input
                           type="number"
-                          placeholder="Damage"
-                          value={formData.damage}
-                          onChange={(e) => setFormData({ ...formData, damage: parseInt(e.target.value) || 0 })}
+                          placeholder="Attack"
+                          value={formData.attack}
+                          onChange={(e) => setFormData({ ...formData, attack: parseInt(e.target.value) || 0 })}
                           className="bg-gray-900 border-gray-600"
                         />
                       </div>
                       
-                      <Textarea
-                        placeholder="Passive Skill (optional)"
-                        value={formData.passiveSkill}
-                        onChange={(e) => setFormData({ ...formData, passiveSkill: e.target.value })}
-                        className="bg-gray-900 border-gray-600"
-                      />
+                      <div className="grid grid-cols-3 gap-4">
+                        <Input
+                          type="number"
+                          placeholder="Defense"
+                          value={formData.defense}
+                          onChange={(e) => setFormData({ ...formData, defense: parseInt(e.target.value) || 0 })}
+                          className="bg-gray-900 border-gray-600"
+                        />
+                        
+                        <Input
+                          type="number"
+                          placeholder="Crit Chance %"
+                          value={formData.criticalChance}
+                          onChange={(e) => setFormData({ ...formData, criticalChance: parseInt(e.target.value) || 0 })}
+                          className="bg-gray-900 border-gray-600"
+                        />
+                        
+                        <Input
+                          type="number"
+                          placeholder="Crit Damage %"
+                          value={formData.criticalDamage}
+                          onChange={(e) => setFormData({ ...formData, criticalDamage: parseInt(e.target.value) || 50 })}
+                          className="bg-gray-900 border-gray-600"
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4">
+                        <Input
+                          type="number"
+                          placeholder="Ranged Resist %"
+                          value={formData.rangedResistance}
+                          onChange={(e) => setFormData({ ...formData, rangedResistance: parseInt(e.target.value) || 10 })}
+                          className="bg-gray-900 border-gray-600"
+                        />
+                        
+                        <Input
+                          type="number"
+                          placeholder="Melee Resist %"
+                          value={formData.meleeResistance}
+                          onChange={(e) => setFormData({ ...formData, meleeResistance: parseInt(e.target.value) || 10 })}
+                          className="bg-gray-900 border-gray-600"
+                        />
+                        
+                        <Input
+                          type="number"
+                          placeholder="Magic Resist %"
+                          value={formData.magicResistance}
+                          onChange={(e) => setFormData({ ...formData, magicResistance: parseInt(e.target.value) || 10 })}
+                          className="bg-gray-900 border-gray-600"
+                        />
+                      </div>
                     </>
                   )}
 
                   {formData.type === 'ability' && (
                     <>
-                      <Input
-                        type="number"
-                        placeholder="Energy Cost"
-                        value={formData.cost}
-                        onChange={(e) => setFormData({ ...formData, cost: parseInt(e.target.value) || 0 })}
-                        className="bg-gray-900 border-gray-600"
-                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          type="number"
+                          placeholder="Energy Cost"
+                          value={formData.cost}
+                          onChange={(e) => setFormData({ ...formData, cost: parseInt(e.target.value) || 0 })}
+                          className="bg-gray-900 border-gray-600"
+                        />
+                        
+                        <Select value={formData.spellType} onValueChange={(value: 'ranged' | 'melee' | 'magical' | 'combat' | 'other') => setFormData({ ...formData, spellType: value })}>
+                          <SelectTrigger className="bg-gray-900 border-gray-600">
+                            <SelectValue placeholder="Spell Type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="combat">Combat (Magic Damage)</SelectItem>
+                            <SelectItem value="ranged">Ranged</SelectItem>
+                            <SelectItem value="melee">Melee</SelectItem>
+                            <SelectItem value="magical">Magical</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       
                       <Textarea
                         placeholder="Ability Description"

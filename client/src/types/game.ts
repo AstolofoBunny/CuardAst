@@ -24,7 +24,7 @@ export interface GameCard {
   
   // Ability properties
   cost?: number; // Energy cost for spells
-  spellType?: 'ranged' | 'melee' | 'magical' | 'other'; // For damage spells
+  spellType?: 'ranged' | 'melee' | 'magical' | 'combat' | 'other'; // For damage spells
   description?: string;
 }
 

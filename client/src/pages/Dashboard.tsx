@@ -194,7 +194,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 value="battle"
                 className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
               >
-                <i className="fas fa-crossed-swords mr-3"></i>
+                <i className="fas fa-sword mr-3"></i>
                 Battle
               </TabsTrigger>
               <TabsTrigger
