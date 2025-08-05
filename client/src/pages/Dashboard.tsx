@@ -239,15 +239,15 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 <i className="fas fa-layer-group mr-3"></i>
                 My Deck {isGuest && '(Login Required)'}
               </TabsTrigger>
-              <TabsTrigger
-                value="current-room"
-                disabled={!currentRoomId}
-                className={`w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white ${!currentRoomId ? 'opacity-50 cursor-not-allowed' : ''}`}
-                style={{ display: currentRoom && currentRoom.type === 'pvp' ? 'flex' : 'none' }}
-              >
-                <i className="fas fa-door-open mr-3"></i>
-                Current Room {!currentRoomId && '(Create Room First)'}
-              </TabsTrigger>
+              {currentRoomId && currentRoom && currentRoom.type === 'pvp' && (
+                <TabsTrigger
+                  value="current-room"
+                  className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
+                >
+                  <i className="fas fa-door-open mr-3"></i>
+                  Current Room
+                </TabsTrigger>
+              )}
               <TabsTrigger
                 value="create-room"
                 disabled={isGuest}

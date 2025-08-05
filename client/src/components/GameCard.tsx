@@ -63,8 +63,12 @@ export function GameCard({ card, onClick, selected, disabled = false, className 
               <span className="text-white font-bold">{card.health}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-yellow-400">⚔️ DMG:</span>
-              <span className="text-white font-bold">{card.damage}</span>
+              <span className="text-yellow-400">⚔️ ATK:</span>
+              <span className="text-white font-bold">{card.attack}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-blue-400">🛡️ DEF:</span>
+              <span className="text-white font-bold">{card.defense}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-blue-400">Class:</span>
