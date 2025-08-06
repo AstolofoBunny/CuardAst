@@ -167,6 +167,23 @@ export interface ChatMessage {
   type: 'user' | 'system';
 }
 
+export interface PlayerState {
+  uid: string;
+  displayName: string;
+  hp: number;
+  energy: number;
+  deck: string[];
+  hand: string[];
+  battlefield: GameCard[];
+  isReady: boolean;
+}
+
+export interface BattleField {
+  left: GameCard | null;
+  center: GameCard | null;
+  right: GameCard | null;
+}
+
 export type GamePhase = 'auth' | 'dashboard' | 'battle';
 
 export interface GameState {

@@ -12,8 +12,9 @@ import { DeckBuilder } from '@/components/DeckBuilder';
 import { AdminPanel } from '@/components/AdminPanel';
 import { AuthModal } from '@/components/AuthModal';
 import { CardsGrid } from '@/components/CardsGrid';
-import { Room } from '@/types/game';
+import { Room, GameCard } from '@/types/game';
 import { Link, useLocation } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
 
 interface DashboardProps {
   user: any;
@@ -23,6 +24,7 @@ interface DashboardProps {
 
 export default function Dashboard({ user, activeTab: initialTab = 'ranking', battleSubTab: initialBattleSubTab }: DashboardProps) {
   const { logout } = useAuth();
+  const { toast } = useToast();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab);
   const [battleSubTab, setBattleSubTab] = useState(initialBattleSubTab || 'waiting-room');
@@ -33,6 +35,22 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [chatMessage, setChatMessage] = useState('');
   const [playerHand, setPlayerHand] = useState<string[]>([]);
   const [playerDeck, setPlayerDeck] = useState<string[]>([]);
+  const [playerHP, setPlayerHP] = useState(50);
+  const [playerEnergy, setPlayerEnergy] = useState(100);
+  const [enemyHP, setEnemyHP] = useState(50);
+  const [enemyEnergy, setEnemyEnergy] = useState(100);
+  const [battlefield, setBattlefield] = useState<{left: GameCard | null, center: GameCard | null, right: GameCard | null}>({
+    left: null,
+    center: null,
+    right: null
+  });
+  const [enemyBattlefield, setEnemyBattlefield] = useState<{left: GameCard | null, center: GameCard | null, right: GameCard | null}>({
+    left: null,
+    center: null,
+    right: null
+  });
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [showPlacementButtons, setShowPlacementButtons] = useState(false);
 
   // Room form state
   const [roomForm, setRoomForm] = useState({
@@ -96,6 +114,64 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     
     await sendChatMessage(user.uid, user.displayName || 'Anonymous', chatMessage.trim());
     setChatMessage('');
+  };
+
+  // Handle card click
+  const handleCardClick = (cardId: string) => {
+    const card = cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    if (card.type === 'battle') {
+      setSelectedCard(cardId);
+      setShowPlacementButtons(true);
+    } else if (card.type === 'ability' && playerEnergy >= (card.cost || 0)) {
+      // Magic card confirmation
+      if (window.confirm(`Use ${card.name} for ${card.cost || 0} energy?\n${card.description}`)) {
+        useMagicCard(cardId);
+      }
+    }
+  };
+
+  // Use magic card
+  const useMagicCard = (cardId: string) => {
+    const card = cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    // Deduct energy
+    setPlayerEnergy(prev => Math.max(0, prev - (card.cost || 0)));
+    
+    // Remove from hand and add to end of deck
+    setPlayerHand(prev => prev.filter(id => id !== cardId));
+    setPlayerDeck(prev => [...prev, cardId]);
+
+    // Apply spell effect (simplified)
+    toast({
+      title: `${card.name} activated!`,
+      description: card.description
+    });
+  };
+
+  // Place battle card on field
+  const placeBattleCard = (position: 'left' | 'center' | 'right') => {
+    if (!selectedCard) return;
+    
+    const card = cards.find(c => c.id === selectedCard);
+    if (!card || card.type !== 'battle') return;
+
+    setBattlefield(prev => ({
+      ...prev,
+      [position]: card
+    }));
+
+    // Remove from hand
+    setPlayerHand(prev => prev.filter(id => id !== selectedCard));
+    setSelectedCard(null);
+    setShowPlacementButtons(false);
+
+    toast({
+      title: "Card Placed",
+      description: `${card.name} placed on ${position} field`
+    });
   };
 
   // Handle tab changes with navigation
@@ -479,83 +555,198 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                 </div>
                               </div>
 
-                              {/* Battlefield */}
-                              <div className="bg-gradient-to-r from-yellow-900 to-orange-900 rounded-lg p-4 mb-6 border-2 border-yellow-600">
-                                <h3 className="text-center text-lg font-bold text-yellow-400 mb-4">BATTLEFIELD</h3>
-                                <div className="grid grid-cols-3 gap-4">
-                                  {/* Opponent Battlefield */}
-                                  <div className="text-center">
-                                    <div className="w-20 h-28 bg-red-700 rounded border-2 border-red-500 mx-auto mb-2 flex items-center justify-center">
-                                      <span className="text-sm font-bold">Enemy</span>
+                              {/* Battlefield with Avatars and Health */}
+                              <div className="bg-gradient-to-r from-yellow-900 to-orange-900 rounded-lg p-6 mb-6 border-2 border-yellow-600">
+                                
+                                {/* Enemy Avatar and Health */}
+                                <div className="flex flex-col items-center space-y-3 mb-6">
+                                  <div className="flex items-center space-x-4">
+                                    <div className="w-16 h-16 bg-red-600 rounded-full border-2 border-red-400 flex items-center justify-center">
+                                      <span className="text-sm font-bold text-white">AI</span>
+                                    </div>
+                                    <div className="flex flex-col space-y-1">
+                                      <div className="text-xs text-red-400 font-bold">Enemy HP: {enemyHP}/50</div>
+                                      <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-red-500 rounded-full transition-all duration-300" style={{ width: `${(enemyHP / 50) * 100}%` }}></div>
+                                      </div>
+                                      <div className="text-xs text-blue-400">Energy: {enemyEnergy}/100</div>
+                                      <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${(enemyEnergy / 100) * 100}%` }}></div>
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="text-center">
-                                    <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
-                                      <span className="text-xs">Empty</span>
+                                </div>
+
+                                {/* Enemy Field */}
+                                <div className="flex space-x-4 justify-center mb-6">
+                                  {(['left', 'center', 'right'] as const).map((position) => (
+                                    <div key={position} className="w-24 h-32 bg-red-600 rounded border-2 border-red-400 flex items-center justify-center">
+                                      {enemyBattlefield[position] ? (
+                                        <div className="text-center p-1">
+                                          <div className="text-xs font-bold text-white mb-1">{enemyBattlefield[position]!.name}</div>
+                                          <div className="text-xs text-red-200">⚔{enemyBattlefield[position]!.attack}</div>
+                                          <div className="text-xs text-red-200">❤{enemyBattlefield[position]!.health}</div>
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs text-red-300">Empty</span>
+                                      )}
                                     </div>
-                                  </div>
-                                  <div className="text-center">
-                                    <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
-                                      <span className="text-xs">Empty</span>
+                                  ))}
+                                </div>
+
+                                <div className="text-center py-4">
+                                  <div className="text-xl font-bold text-yellow-400 mb-1">⚔ BATTLE ARENA ⚔</div>
+                                  <div className="text-sm text-yellow-300">Your Turn - Place cards or cast spells</div>
+                                </div>
+
+                                {/* Player Field */}
+                                <div className="flex space-x-4 justify-center mb-6">
+                                  {(['left', 'center', 'right'] as const).map((position) => (
+                                    <div key={position} className="w-24 h-32 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center">
+                                      {battlefield[position] ? (
+                                        <div className="text-center p-1">
+                                          <div className="text-xs font-bold text-white mb-1">{battlefield[position]!.name}</div>
+                                          <div className="text-xs text-blue-200">⚔{battlefield[position]!.attack}</div>
+                                          <div className="text-xs text-blue-200">❤{battlefield[position]!.health}</div>
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs text-blue-300">Empty</span>
+                                      )}
                                     </div>
-                                  </div>
-                                  
-                                  {/* Your Battlefield */}
-                                  <div className="text-center">
-                                    <div className="w-20 h-28 bg-blue-700 rounded border-2 border-blue-500 mx-auto mb-2 flex items-center justify-center">
-                                      <span className="text-sm font-bold">Your</span>
+                                  ))}
+                                </div>
+
+                                {/* Player Avatar and Health */}
+                                <div className="flex flex-col items-center space-y-3">
+                                  <div className="flex items-center space-x-4">
+                                    <div className="w-16 h-16 bg-blue-600 rounded-full border-2 border-blue-400 flex items-center justify-center">
+                                      <span className="text-sm font-bold text-white">{user?.displayName?.charAt(0) || 'P'}</span>
                                     </div>
-                                  </div>
-                                  <div className="text-center">
-                                    <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
-                                      <span className="text-xs">Empty</span>
-                                    </div>
-                                  </div>
-                                  <div className="text-center">
-                                    <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
-                                      <span className="text-xs">Empty</span>
+                                    <div className="flex flex-col space-y-1">
+                                      <div className="text-xs text-blue-400 font-bold">Your HP: {playerHP}/50</div>
+                                      <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${(playerHP / 50) * 100}%` }}></div>
+                                      </div>
+                                      <div className="text-xs text-green-400">Energy: {playerEnergy}/100</div>
+                                      <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-green-500 rounded-full transition-all duration-300" style={{ width: `${(playerEnergy / 100) * 100}%` }}></div>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
 
-                              {/* Your Cards (Bottom) */}
+                              {/* Deck and Hand Section */}
                               <div className="mb-6">
-                                <div className="flex justify-between items-center mb-3">
-                                  <h3 className="text-lg font-bold text-blue-400">Your Hand</h3>
-                                  <div className="text-sm text-blue-300">
-                                    Deck: {playerDeck.length} cards
+                                <div className="flex items-end justify-center space-x-8">
+                                  {/* Deck Stack (Left side) */}
+                                  <div className="flex flex-col items-center">
+                                    <h3 className="text-sm font-bold text-blue-400 mb-2">Deck ({playerDeck.length})</h3>
+                                    <div className="relative">
+                                      {playerDeck.length > 0 ? (
+                                        <div className="relative">
+                                          {/* Stack effect - multiple cards */}
+                                          <div className="absolute w-20 h-28 bg-gray-700 rounded border-2 border-gray-600 transform translate-x-1 translate-y-1"></div>
+                                          <div className="absolute w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 transform translate-x-0.5 translate-y-0.5"></div>
+                                          <div className="w-20 h-28 bg-blue-800 rounded border-2 border-blue-600 flex items-center justify-center relative z-10">
+                                            <span className="text-xs text-blue-200 font-bold">DECK</span>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 flex items-center justify-center">
+                                          <span className="text-xs text-gray-400">Empty</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Hand Cards (Right side) */}
+                                  <div className="flex flex-col items-center">
+                                    <h3 className="text-sm font-bold text-blue-400 mb-2">Your Hand</h3>
+                                    <div className="flex space-x-2">
+                                      {playerHand.length > 0 ? (
+                                        playerHand.map((cardId, index) => {
+                                          const card = cards.find(c => c.id === cardId);
+                                          const isSelected = selectedCard === cardId;
+                                          return (
+                                            <div 
+                                              key={cardId || index} 
+                                              className={`w-24 h-32 rounded border-2 flex flex-col items-center justify-center cursor-pointer relative group transition-all ${
+                                                isSelected ? 'border-yellow-400 bg-yellow-600 transform -translate-y-2' : 
+                                                card?.imageUrl ? 'border-blue-400 bg-blue-600 hover:bg-blue-500' : 'border-gray-400 bg-gray-600 hover:bg-gray-500'
+                                              }`}
+                                              onClick={() => handleCardClick(cardId)}
+                                            >
+                                              {card?.imageUrl ? (
+                                                <img 
+                                                  src={card.imageUrl} 
+                                                  alt={card.name}
+                                                  className="w-full h-full object-cover rounded"
+                                                />
+                                              ) : (
+                                                <div className="text-center p-1">
+                                                  <div className="text-xs font-bold text-white mb-1">{card?.name || `Card ${index + 1}`}</div>
+                                                  <div className="text-xs text-blue-200">{card?.type}</div>
+                                                </div>
+                                              )}
+                                              
+                                              {/* Card tooltip */}
+                                              {card && (
+                                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-20 bg-gray-800 border border-blue-400 rounded p-2 text-xs whitespace-nowrap">
+                                                  <div className="font-bold">{card.name}</div>
+                                                  <div>Type: {card.type}</div>
+                                                  {card.attack && <div>Attack: {card.attack}</div>}
+                                                  {card.health && <div>Health: {card.health}</div>}
+                                                  {card.cost && <div>Energy: {card.cost}</div>}
+                                                  {card.description && <div className="mt-1 text-gray-300">{card.description}</div>}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })
+                                      ) : (
+                                        [1, 2, 3, 4, 5].map((placeholder) => (
+                                          <div key={placeholder} className="w-24 h-32 bg-gray-600 rounded border-2 border-gray-500 flex items-center justify-center">
+                                            <span className="text-xs text-gray-400">No Deck</span>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                                <div className="flex space-x-2 justify-center">
-                                  {playerHand.length > 0 ? (
-                                    playerHand.map((cardId, index) => {
-                                      const card = cards.find(c => c.id === cardId);
-                                      return (
-                                        <div key={cardId || index} className="w-16 h-24 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center cursor-pointer hover:bg-blue-500 relative group">
-                                          <span className="text-xs font-bold text-center px-1">
-                                            {card?.name || `Card ${index + 1}`}
-                                          </span>
-                                          {card && (
-                                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 bg-gray-800 border border-blue-400 rounded p-2 text-xs whitespace-nowrap">
-                                              <div className="font-bold">{card.name}</div>
-                                              <div>Type: {card.type}</div>
-                                              {card.attack && <div>Attack: {card.attack}</div>}
-                                              {card.health && <div>Health: {card.health}</div>}
-                                              {card.cost && <div>Cost: {card.cost}</div>}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })
-                                  ) : (
-                                    [1, 2, 3, 4, 5].map((placeholder) => (
-                                      <div key={placeholder} className="w-16 h-24 bg-gray-600 rounded border-2 border-gray-500 flex items-center justify-center">
-                                        <span className="text-xs text-gray-400">No Deck</span>
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
+
+                                {/* Placement buttons for battle cards */}
+                                {showPlacementButtons && (
+                                  <div className="mt-4 flex justify-center space-x-4">
+                                    <Button 
+                                      onClick={() => placeBattleCard('left')} 
+                                      disabled={!!battlefield.left}
+                                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
+                                    >
+                                      Left Field
+                                    </Button>
+                                    <Button 
+                                      onClick={() => placeBattleCard('center')} 
+                                      disabled={!!battlefield.center}
+                                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
+                                    >
+                                      Center Field
+                                    </Button>
+                                    <Button 
+                                      onClick={() => placeBattleCard('right')} 
+                                      disabled={!!battlefield.right}
+                                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
+                                    >
+                                      Right Field
+                                    </Button>
+                                    <Button 
+                                      onClick={() => { setSelectedCard(null); setShowPlacementButtons(false); }} 
+                                      variant="outline"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Battle Controls */}
