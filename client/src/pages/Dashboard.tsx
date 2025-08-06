@@ -54,6 +54,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [currentRound, setCurrentRound] = useState(1);
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [battleCardsPlayedThisRound, setBattleCardsPlayedThisRound] = useState(0);
+  const [enemyHand, setEnemyHand] = useState<string[]>([]);
+  const [enemyDeck, setEnemyDeck] = useState<string[]>([]);
+  const [selectedAttacker, setSelectedAttacker] = useState<'left' | 'center' | 'right' | null>(null);
+  const [showAttackTargets, setShowAttackTargets] = useState(false);
+  const [isPvE, setIsPvE] = useState(false);
 
   // Room form state
   const [roomForm, setRoomForm] = useState({
@@ -193,6 +198,83 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }
   };
 
+  // Handle card attack on battlefield
+  const handleAttackClick = (position: 'left' | 'center' | 'right') => {
+    if (!isPlayerTurn || currentRound < 2) return; // Can't attack in round 1
+    
+    const attackerCard = battlefield[position];
+    if (!attackerCard) return;
+    
+    setSelectedAttacker(position);
+    setShowAttackTargets(true);
+  };
+
+  // Execute attack on target
+  const executeAttack = (target: 'enemy' | 'left' | 'center' | 'right') => {
+    if (!selectedAttacker) return;
+    
+    const attackerCard = battlefield[selectedAttacker];
+    if (!attackerCard) return;
+
+    if (target === 'enemy') {
+      // Attack enemy player directly
+      const damage = attackerCard.attack || 0;
+      setEnemyHP(prev => Math.max(0, prev - damage));
+      console.log(`${attackerCard.name} attacked enemy for ${damage} damage`);
+    } else {
+      // Attack enemy card
+      const targetCard = enemyBattlefield[target];
+      if (!targetCard) return;
+
+      // Calculate damage with formula
+      let baseDamage = attackerCard.attack || 0;
+      
+      // Check for critical hit
+      const critChance = attackerCard.criticalChance || 0;
+      const isCrit = Math.random() * 100 < critChance;
+      if (isCrit) {
+        const critMultiplier = 1 + (attackerCard.criticalDamage || 0) / 100;
+        baseDamage = Math.floor(baseDamage * critMultiplier);
+        console.log('Critical hit!');
+      }
+
+      // Apply defense and resistances
+      const defense = targetCard.defense || 0;
+      let finalDamage = baseDamage - defense;
+
+      // Apply class-based resistance
+      const attackerClass = attackerCard.spellType || 'melee'; // Default to melee if no spell type
+      if (attackerClass === 'ranged' && targetCard.rangedResistance) {
+        finalDamage = finalDamage * (1 - targetCard.rangedResistance / 100);
+      } else if (attackerClass === 'melee' && targetCard.meleeResistance) {
+        finalDamage = finalDamage * (1 - targetCard.meleeResistance / 100);
+      } else if (attackerClass === 'magical' && targetCard.magicResistance) {
+        finalDamage = finalDamage * (1 - targetCard.magicResistance / 100);
+      }
+
+      finalDamage = Math.max(1, Math.floor(finalDamage)); // Minimum 1 damage
+
+      // Apply damage to target card
+      const newHealth = Math.max(0, (targetCard.health || 1) - finalDamage);
+      
+      if (newHealth <= 0) {
+        // Card destroyed
+        setEnemyBattlefield(prev => ({ ...prev, [target]: null }));
+        console.log(`${targetCard.name} destroyed!`);
+      } else {
+        // Update card health
+        setEnemyBattlefield(prev => ({
+          ...prev,
+          [target]: { ...targetCard, health: newHealth }
+        }));
+        console.log(`${targetCard.name} took ${finalDamage} damage, health: ${newHealth}`);
+      }
+    }
+
+    setSelectedAttacker(null);
+    setShowAttackTargets(false);
+  };
+
   // Place battle card on field
   const placeBattleCard = (position: 'left' | 'center' | 'right') => {
     if (!selectedCard) return;
@@ -256,6 +338,66 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }
   };
 
+  // Initialize bot deck with random cards
+  const initializeBotDeck = () => {
+    if (cards.length === 0) return;
+    
+    // Get 10 random cards for bot
+    const shuffledCards = [...cards].sort(() => Math.random() - 0.5);
+    const botDeckCards = shuffledCards.slice(0, 10).map(card => card.id);
+    
+    // Give bot initial hand of 5 cards
+    const { hand, remainingDeck } = distributeCards(botDeckCards);
+    setEnemyHand(hand);
+    setEnemyDeck(remainingDeck);
+    
+    console.log('Bot deck initialized with', botDeckCards.length, 'cards');
+  };
+
+  // Bot AI turn logic
+  const executeBotTurn = () => {
+    console.log('Bot turn started');
+    
+    // Bot decision making (simplified)
+    setTimeout(() => {
+      // 1. Bot might draw a card if hand not full and has energy
+      if (enemyHand.length < 5 && enemyDeck.length > 0 && enemyEnergy >= 5) {
+        const topCard = enemyDeck[0];
+        setEnemyHand(prev => [...prev, topCard]);
+        setEnemyDeck(prev => prev.slice(1));
+        setEnemyEnergy(prev => Math.max(0, prev - 5));
+        console.log('Bot drew a card');
+      }
+      
+      // 2. Bot might place a battle card if has energy and empty slot
+      const emptySlots = ['left', 'center', 'right'].filter(pos => !enemyBattlefield[pos as keyof typeof enemyBattlefield]);
+      if (emptySlots.length > 0 && enemyHand.length > 0 && enemyEnergy >= 20) {
+        const randomCard = enemyHand[Math.floor(Math.random() * enemyHand.length)];
+        const card = cards.find(c => c.id === randomCard);
+        if (card && card.type === 'battle') {
+          const randomSlot = emptySlots[Math.floor(Math.random() * emptySlots.length)] as 'left' | 'center' | 'right';
+          setEnemyBattlefield(prev => ({
+            ...prev,
+            [randomSlot]: card
+          }));
+          setEnemyHand(prev => prev.filter(id => id !== randomCard));
+          setEnemyEnergy(prev => Math.max(0, prev - 20));
+          console.log(`Bot placed ${card.name} on ${randomSlot}`);
+        }
+      }
+      
+      // End bot turn after 3 seconds
+      setTimeout(() => {
+        setPlayerEnergy(prev => Math.min(100, prev + 15));
+        setEnemyEnergy(prev => Math.min(100, prev + 15));
+        setBattleCardsPlayedThisRound(0);
+        setCurrentRound(prev => prev + 1);
+        setIsPlayerTurn(true);
+        console.log(`Round ${currentRound + 1} started`);
+      }, 1000);
+    }, 2000);
+  };
+
   // End player turn function
   const endPlayerTurn = () => {
     if (!isPlayerTurn) return;
@@ -263,16 +405,19 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     setIsPlayerTurn(false);
     console.log('Player turn ended');
     
-    // AI/Enemy turn simulation (simplified)
-    setTimeout(() => {
-      // Replenish 15 energy for next round and switch back to player
-      setPlayerEnergy(prev => Math.min(100, prev + 15));
-      setEnemyEnergy(prev => Math.min(100, prev + 15));
-      setBattleCardsPlayedThisRound(0);
-      setCurrentRound(prev => prev + 1);
-      setIsPlayerTurn(true);
-      console.log(`Round ${currentRound + 1} started`);
-    }, 2000); // 2 second enemy turn
+    if (isPvE) {
+      executeBotTurn();
+    } else {
+      // PvP mode - simplified enemy turn
+      setTimeout(() => {
+        setPlayerEnergy(prev => Math.min(100, prev + 15));
+        setEnemyEnergy(prev => Math.min(100, prev + 15));
+        setBattleCardsPlayedThisRound(0);
+        setCurrentRound(prev => prev + 1);
+        setIsPlayerTurn(true);
+        console.log(`Round ${currentRound + 1} started`);
+      }, 2000);
+    }
   };
 
   // Handle tab changes with navigation
@@ -666,7 +811,12 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                 {/* Enemy Avatar and Health */}
                                 <div className="flex flex-col items-center space-y-3 mb-6">
                                   <div className="flex items-center space-x-4">
-                                    <div className="w-16 h-16 bg-red-600 rounded-full border-2 border-red-400 flex items-center justify-center">
+                                    <div 
+                                      className={`w-16 h-16 bg-red-600 rounded-full border-2 border-red-400 flex items-center justify-center cursor-pointer transition-all ${
+                                        showAttackTargets ? 'animate-pulse border-yellow-400' : ''
+                                      }`}
+                                      onClick={() => showAttackTargets ? executeAttack('enemy') : undefined}
+                                    >
                                       <span className="text-sm font-bold text-white">AI</span>
                                     </div>
                                     <div className="flex flex-col space-y-1">
@@ -684,19 +834,51 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
                                 {/* Enemy Field */}
                                 <div className="flex space-x-4 justify-center mb-6">
-                                  {(['left', 'center', 'right'] as const).map((position) => (
-                                    <div key={position} className="w-24 h-32 bg-red-600 rounded border-2 border-red-400 flex items-center justify-center">
-                                      {enemyBattlefield[position] ? (
-                                        <div className="text-center p-1">
-                                          <div className="text-xs font-bold text-white mb-1">{enemyBattlefield[position]!.name}</div>
-                                          <div className="text-xs text-red-200">⚔{enemyBattlefield[position]!.attack}</div>
-                                          <div className="text-xs text-red-200">❤{enemyBattlefield[position]!.health}</div>
-                                        </div>
-                                      ) : (
-                                        <span className="text-xs text-red-300">Empty</span>
-                                      )}
-                                    </div>
-                                  ))}
+                                  {(['left', 'center', 'right'] as const).map((position) => {
+                                    const enemyCard = enemyBattlefield[position];
+                                    return (
+                                      <div 
+                                        key={position} 
+                                        className={`w-24 h-32 rounded border-2 flex items-center justify-center relative overflow-hidden ${
+                                          showAttackTargets && selectedAttacker && enemyCard
+                                            ? 'bg-red-500 border-yellow-400 cursor-pointer animate-pulse'
+                                            : 'bg-red-600 border-red-400'
+                                        }`}
+                                        onClick={() => showAttackTargets && enemyCard ? executeAttack(position) : undefined}
+                                      >
+                                        {enemyCard ? (
+                                          <div className="w-full h-full relative">
+                                            {enemyCard.imageUrl ? (
+                                              <img 
+                                                src={enemyCard.imageUrl} 
+                                                alt={enemyCard.name}
+                                                className="w-full h-full object-cover rounded"
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full bg-red-700 flex items-center justify-center">
+                                                <div className="text-center p-1">
+                                                  <div className="text-xs font-bold text-white mb-1">{enemyCard.name}</div>
+                                                  <div className="text-xs text-red-200">⚔{enemyCard.attack || 0}</div>
+                                                  <div className="text-xs text-red-200">🛡{enemyCard.defense || 0}</div>
+                                                  <div className="text-xs text-red-200">❤{enemyCard.health || 1}</div>
+                                                </div>
+                                              </div>
+                                            )}
+                                            {/* Stats overlay */}
+                                            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-1">
+                                              <div className="flex justify-between">
+                                                <span>⚔{enemyCard.attack || 0}</span>
+                                                <span>🛡{enemyCard.defense || 0}</span>
+                                                <span>❤{enemyCard.health || 1}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <span className="text-xs text-red-300">Empty</span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
 
                                 <div className="text-center py-4 relative">
@@ -715,7 +897,17 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                   {(['left', 'center', 'right'] as const).map((position) => {
                                     const placedCard = battlefield[position];
                                     return (
-                                      <div key={position} className="w-24 h-32 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center relative overflow-hidden">
+                                      <div 
+                                        key={position} 
+                                        className={`w-24 h-32 rounded border-2 flex items-center justify-center relative overflow-hidden cursor-pointer transition-all ${
+                                          placedCard 
+                                            ? (currentRound >= 2 && isPlayerTurn) 
+                                              ? 'bg-blue-600 border-blue-400 hover:border-yellow-400 hover:bg-blue-500' 
+                                              : 'bg-blue-600 border-blue-400'
+                                            : 'bg-blue-600 border-blue-400'
+                                        }`}
+                                        onClick={() => placedCard && currentRound >= 2 ? handleAttackClick(position) : undefined}
+                                      >
                                         {placedCard ? (
                                           <div className="w-full h-full relative">
                                             {placedCard.imageUrl ? (
@@ -743,6 +935,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                                 <span>❤{placedCard.health || 1}</span>
                                               </div>
                                             </div>
+                                            
+                                            {/* Attack indicator */}
+                                            {currentRound >= 2 && isPlayerTurn && (
+                                              <div className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                                            )}
                                           </div>
                                         ) : (
                                           <span className="text-xs text-blue-300">Empty</span>
@@ -922,6 +1119,25 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                       variant="outline"
                                     >
                                       Cancel
+                                    </Button>
+                                  </div>
+                                )}
+
+                                {/* Attack targeting overlay */}
+                                {showAttackTargets && selectedAttacker && (
+                                  <div className="mt-4 text-center">
+                                    <div className="mb-4 p-3 bg-yellow-600 bg-opacity-50 border border-yellow-400 rounded">
+                                      <div className="text-yellow-200 font-bold">Select Attack Target</div>
+                                      <div className="text-sm text-yellow-300">
+                                        {battlefield[selectedAttacker]?.name} is ready to attack!
+                                      </div>
+                                    </div>
+                                    <Button 
+                                      onClick={() => { setSelectedAttacker(null); setShowAttackTargets(false); }} 
+                                      variant="outline"
+                                      className="border-gray-600"
+                                    >
+                                      Cancel Attack
                                     </Button>
                                   </div>
                                 )}
