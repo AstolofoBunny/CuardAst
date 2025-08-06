@@ -174,11 +174,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     setSelectedCard(null);
     setShowPlacementButtons(false);
 
-    // Simple success toast without auto-dismiss to prevent page refresh
+    // Simple success toast without circular reference
     toast({
-      title: "Card Placed Successfully",
+      title: "Card Placed Successfully", 
       description: `${card.name} is now on the ${position} field`,
-      duration: 3000
+      duration: 2000
     });
   };
 
@@ -634,12 +634,31 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                 {/* Player Field */}
                                 <div className="flex space-x-4 justify-center mb-6">
                                   {(['left', 'center', 'right'] as const).map((position) => (
-                                    <div key={position} className="w-24 h-32 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center">
+                                    <div key={position} className="w-24 h-32 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center relative overflow-hidden">
                                       {battlefield[position] ? (
-                                        <div className="text-center p-1">
-                                          <div className="text-xs font-bold text-white mb-1">{battlefield[position]!.name}</div>
-                                          <div className="text-xs text-blue-200">⚔{battlefield[position]!.attack}</div>
-                                          <div className="text-xs text-blue-200">❤{battlefield[position]!.health}</div>
+                                        <div className="w-full h-full relative">
+                                          {battlefield[position]!.imageUrl ? (
+                                            <img 
+                                              src={battlefield[position]!.imageUrl} 
+                                              alt={battlefield[position]!.name}
+                                              className="w-full h-full object-cover rounded"
+                                            />
+                                          ) : (
+                                            <div className="w-full h-full bg-blue-700 flex items-center justify-center">
+                                              <div className="text-center p-1">
+                                                <div className="text-xs font-bold text-white mb-1">{battlefield[position]!.name}</div>
+                                                <div className="text-xs text-blue-200">⚔{battlefield[position]!.attack}</div>
+                                                <div className="text-xs text-blue-200">❤{battlefield[position]!.health}</div>
+                                              </div>
+                                            </div>
+                                          )}
+                                          {/* Stats overlay */}
+                                          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-1">
+                                            <div className="flex justify-between">
+                                              <span>⚔{battlefield[position]!.attack}</span>
+                                              <span>❤{battlefield[position]!.health}</span>
+                                            </div>
+                                          </div>
                                         </div>
                                       ) : (
                                         <span className="text-xs text-blue-300">Empty</span>

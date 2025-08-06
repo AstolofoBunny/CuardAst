@@ -156,7 +156,11 @@ function toast({ ...props }: Toast) {
       id,
       open: true,
       onOpenChange: (open) => {
-        if (!open) dismiss()
+        // Prevent page refresh by not immediately dismissing
+        if (!open) {
+          // Use a longer delay to prevent conflicts with any form state
+          setTimeout(() => dismiss(), 50);
+        }
       },
     },
   })
