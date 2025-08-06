@@ -51,6 +51,9 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   });
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [showPlacementButtons, setShowPlacementButtons] = useState(false);
+  const [currentRound, setCurrentRound] = useState(1);
+  const [isPlayerTurn, setIsPlayerTurn] = useState(true);
+  const [battleCardsPlayedThisRound, setBattleCardsPlayedThisRound] = useState(0);
 
   // Room form state
   const [roomForm, setRoomForm] = useState({
@@ -137,19 +140,27 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     const card = cards.find(c => c.id === cardId);
     if (!card) return;
 
+    const energyCost = card.cost || 10;
+    
+    // Check if player can afford the energy cost
+    if (playerEnergy < energyCost) {
+      console.log('Not enough energy to use ability card');
+      return;
+    }
+
     // Deduct energy
-    setPlayerEnergy(prev => Math.max(0, prev - (card.cost || 0)));
+    setPlayerEnergy(prev => Math.max(0, prev - energyCost));
     
     // Remove from hand and add to end of deck
     setPlayerHand(prev => prev.filter(id => id !== cardId));
     setPlayerDeck(prev => [...prev, cardId]);
 
-    // Apply spell effect (simplified)
-    toast({
-      title: `${card.name} Activated!`,
-      description: card.description,
-      duration: 2500
-    });
+    console.log(`${card.name} activated! Energy cost: ${energyCost}`);
+    
+    // Check if energy is 0 and auto-end turn
+    if (playerEnergy - energyCost <= 0) {
+      setTimeout(() => endPlayerTurn(), 1000);
+    }
   };
 
   // Place battle card on field
@@ -159,8 +170,25 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     const card = cards.find(c => c.id === selectedCard);
     if (!card || card.type !== 'battle') return;
 
+    // Check if player can afford the energy cost (20 for battle cards)
+    const energyCost = 20;
+    if (playerEnergy < energyCost) {
+      console.log('Not enough energy to place card');
+      return;
+    }
+
+    // Check if player can place battle cards this round (max 1 per round)
+    if (battleCardsPlayedThisRound >= 1) {
+      console.log('Cannot place more battle cards this round');
+      return;
+    }
+
     console.log('Placing card:', card.name, 'at position:', position);
     console.log('Card details:', card);
+
+    // Deduct energy
+    setPlayerEnergy(prev => Math.max(0, prev - energyCost));
+    setBattleCardsPlayedThisRound(prev => prev + 1);
 
     // Update battlefield state
     setBattlefield(prev => {
@@ -190,7 +218,31 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     setSelectedCard(null);
     setShowPlacementButtons(false);
 
-    console.log(`Card ${card.name} placed successfully on ${position} field`);
+    console.log(`Card ${card.name} placed successfully on ${position} field. Energy: ${playerEnergy - energyCost}`);
+    
+    // Check if energy is 0 and auto-end turn
+    if (playerEnergy - energyCost <= 0) {
+      setTimeout(() => endPlayerTurn(), 1000);
+    }
+  };
+
+  // End player turn function
+  const endPlayerTurn = () => {
+    if (!isPlayerTurn) return;
+    
+    setIsPlayerTurn(false);
+    console.log('Player turn ended');
+    
+    // AI/Enemy turn simulation (simplified)
+    setTimeout(() => {
+      // Reset energy for next round and switch back to player
+      setPlayerEnergy(100);
+      setEnemyEnergy(100);
+      setBattleCardsPlayedThisRound(0);
+      setCurrentRound(prev => prev + 1);
+      setIsPlayerTurn(true);
+      console.log(`Round ${currentRound + 1} started`);
+    }, 2000); // 2 second enemy turn
   };
 
   // Handle tab changes with navigation
@@ -619,7 +671,16 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
                                 <div className="text-center py-4">
                                   <div className="text-xl font-bold text-yellow-400 mb-1">⚔ BATTLE ARENA ⚔</div>
-                                  <div className="text-sm text-yellow-300">Your Turn - Place cards or cast spells</div>
+                                  <div className="text-sm text-yellow-300">{isPlayerTurn ? 'Your Turn' : 'Enemy Turn'} - {isPlayerTurn ? 'Place cards or cast spells' : 'Wait for enemy'}</div>
+                                </div>
+                                
+                                {/* Round and Turn Indicator */}
+                                <div className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-gray-800 border border-yellow-600 rounded-lg p-3">
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-yellow-400">Round {currentRound}</div>
+                                    <div className="text-xs text-gray-300 mt-1">Battle Cards: {battleCardsPlayedThisRound}/1</div>
+                                    <div className="text-xs text-blue-300">Energy: {playerEnergy}/100</div>
+                                  </div>
                                 </div>
 
                                 {/* Player Field */}
@@ -721,7 +782,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                                 isSelected ? 'border-yellow-400 bg-yellow-600 transform -translate-y-2' : 
                                                 card?.imageUrl ? 'border-blue-400 bg-blue-600 hover:bg-blue-500' : 'border-gray-400 bg-gray-600 hover:bg-gray-500'
                                               }`}
-                                              onClick={() => handleCardClick(cardId)}
+                                              onClick={() => isPlayerTurn ? handleCardClick(cardId) : undefined}
                                             >
                                               {card?.imageUrl ? (
                                                 <img 
@@ -736,15 +797,27 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                                 </div>
                                               )}
                                               
-                                              {/* Card tooltip */}
+                                              {/* Card tooltip - Show ALL characteristics */}
                                               {card && (
-                                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-20 bg-gray-800 border border-blue-400 rounded p-2 text-xs whitespace-nowrap">
-                                                  <div className="font-bold">{card.name}</div>
-                                                  <div>Type: {card.type}</div>
-                                                  {card.attack && <div>Attack: {card.attack}</div>}
-                                                  {card.health && <div>Health: {card.health}</div>}
-                                                  {card.cost && <div>Energy: {card.cost}</div>}
-                                                  {card.description && <div className="mt-1 text-gray-300">{card.description}</div>}
+                                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-20 bg-gray-800 border border-blue-400 rounded p-3 text-xs min-w-48">
+                                                  <div className="font-bold text-yellow-400 mb-2">{card.name}</div>
+                                                  <div className="space-y-1">
+                                                    <div>Type: <span className="text-blue-300">{card.type}</span></div>
+                                                    {card.attack !== undefined && <div>Attack: <span className="text-red-400">{card.attack}</span></div>}
+                                                    {card.defense !== undefined && <div>Defense: <span className="text-green-400">{card.defense}</span></div>}
+                                                    {card.health !== undefined && <div>Health: <span className="text-pink-400">{card.health}</span></div>}
+                                                    {card.cost !== undefined && <div>Energy Cost: <span className="text-yellow-300">{card.cost}</span></div>}
+                                                    {card.criticalChance !== undefined && <div>Crit Chance: <span className="text-orange-400">{card.criticalChance}%</span></div>}
+                                                    {card.criticalDamage !== undefined && <div>Crit Damage: <span className="text-orange-400">{card.criticalDamage}%</span></div>}
+                                                    {card.rangedResistance !== undefined && <div>Ranged Resist: <span className="text-purple-400">{card.rangedResistance}%</span></div>}
+                                                    {card.meleeResistance !== undefined && <div>Melee Resist: <span className="text-purple-400">{card.meleeResistance}%</span></div>}
+                                                    {card.magicResistance !== undefined && <div>Magic Resist: <span className="text-purple-400">{card.magicResistance}%</span></div>}
+                                                    {card.spellType && <div>Spell Type: <span className="text-cyan-400">{card.spellType}</span></div>}
+                                                    {card.passiveAbilities && card.passiveAbilities.length > 0 && (
+                                                      <div>Passive: <span className="text-lime-400">{card.passiveAbilities.join(', ')}</span></div>
+                                                    )}
+                                                  </div>
+                                                  {card.description && <div className="mt-2 text-gray-300 italic border-t border-gray-600 pt-2">{card.description}</div>}
                                                 </div>
                                               )}
                                             </div>
@@ -766,24 +839,24 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                   <div className="mt-4 flex justify-center space-x-4">
                                     <Button 
                                       onClick={() => placeBattleCard('left')} 
-                                      disabled={!!battlefield.left}
+                                      disabled={!!battlefield.left || playerEnergy < 20 || battleCardsPlayedThisRound >= 1 || !isPlayerTurn}
                                       className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
                                     >
-                                      Left Field
+                                      Left Field (20 Energy)
                                     </Button>
                                     <Button 
                                       onClick={() => placeBattleCard('center')} 
-                                      disabled={!!battlefield.center}
+                                      disabled={!!battlefield.center || playerEnergy < 20 || battleCardsPlayedThisRound >= 1 || !isPlayerTurn}
                                       className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
                                     >
-                                      Center Field
+                                      Center Field (20 Energy)
                                     </Button>
                                     <Button 
                                       onClick={() => placeBattleCard('right')} 
-                                      disabled={!!battlefield.right}
+                                      disabled={!!battlefield.right || playerEnergy < 20 || battleCardsPlayedThisRound >= 1 || !isPlayerTurn}
                                       className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
                                     >
-                                      Right Field
+                                      Right Field (20 Energy)
                                     </Button>
                                     <Button 
                                       onClick={() => { setSelectedCard(null); setShowPlacementButtons(false); }} 
@@ -797,7 +870,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
                               {/* Battle Controls */}
                               <div className="flex justify-center mt-6 space-x-4">
-                                <Button className="bg-green-600 hover:bg-green-700 px-6">
+                                <Button 
+                                  onClick={endPlayerTurn}
+                                  disabled={!isPlayerTurn}
+                                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500 px-6"
+                                >
                                   <i className="fas fa-play mr-2"></i>
                                   End Turn
                                 </Button>
@@ -808,6 +885,14 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                 <Button
                                   onClick={() => {
                                     setCurrentRoomId(null);
+                                    // Reset battle state
+                                    setCurrentRound(1);
+                                    setIsPlayerTurn(true);
+                                    setBattleCardsPlayedThisRound(0);
+                                    setPlayerEnergy(100);
+                                    setPlayerHP(50);
+                                    setBattlefield({ left: null, center: null, right: null });
+                                    setEnemyBattlefield({ left: null, center: null, right: null });
                                     handleTabChange('ranking');
                                   }}
                                   variant="destructive"
