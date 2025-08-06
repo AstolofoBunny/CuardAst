@@ -146,8 +146,9 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
     // Apply spell effect (simplified)
     toast({
-      title: `${card.name} activated!`,
-      description: card.description
+      title: `${card.name} Activated!`,
+      description: card.description,
+      duration: 2500
     });
   };
 
@@ -158,19 +159,26 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     const card = cards.find(c => c.id === selectedCard);
     if (!card || card.type !== 'battle') return;
 
-    setBattlefield(prev => ({
-      ...prev,
-      [position]: card
-    }));
+    // Force a state update to ensure the card placement is visible
+    setBattlefield(prev => {
+      const newBattlefield = {
+        ...prev,
+        [position]: card
+      };
+      console.log('Placing card:', card.name, 'at position:', position, 'New battlefield:', newBattlefield);
+      return newBattlefield;
+    });
 
     // Remove from hand
     setPlayerHand(prev => prev.filter(id => id !== selectedCard));
     setSelectedCard(null);
     setShowPlacementButtons(false);
 
+    // Simple success toast without auto-dismiss to prevent page refresh
     toast({
-      title: "Card Placed",
-      description: `${card.name} placed on ${position} field`
+      title: "Card Placed Successfully",
+      description: `${card.name} is now on the ${position} field`,
+      duration: 3000
     });
   };
 
@@ -218,21 +226,35 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
         setRoomForm({ name: '', type: 'pvp', description: '' });
         setCurrentRoomId(roomId);
         
-        // Always navigate to Battle tab first
-        handleTabChange('battle');
+        // Show success toast first
+        toast({
+          title: "Room Created Successfully",
+          description: `${roomData.name} is ready for battle!`,
+          duration: 2000
+        });
         
-        // Then set the appropriate sub-tab
-        if (roomForm.type === 'pve') {
-          // For PvE rooms, go directly to fight sub-tab
-          setBattleSubTab('fight');
-        } else {
-          // For PvP rooms, go to waiting room sub-tab to wait for opponent
-          setBattleSubTab('waiting-room');
-        }
+        // Small delay to prevent navigation conflicts with toast
+        setTimeout(() => {
+          // Always navigate to Battle tab first
+          handleTabChange('battle');
+          
+          // Then set the appropriate sub-tab
+          if (roomForm.type === 'pve') {
+            // For PvE rooms, go directly to fight sub-tab
+            setBattleSubTab('fight');
+          } else {
+            // For PvP rooms, go to waiting room sub-tab to wait for opponent
+            setBattleSubTab('waiting-room');
+          }
+        }, 100);
       }
     } catch (error) {
       console.error('Error creating room:', error);
-      alert('Failed to create room. Please try again.');
+      toast({
+        title: "Failed to Create Room",
+        description: "Please try again.",
+        duration: 3000
+      });
     }
   };
 
@@ -252,17 +274,27 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       setCurrentRoomId(roomId);
       const room = rooms.find(r => r.id === roomId);
       
-      // Always navigate to Battle tab first
-      handleTabChange('battle');
+      // Show success toast first
+      toast({
+        title: "Joined Room Successfully",
+        description: `Welcome to ${room?.name || 'the battle room'}!`,
+        duration: 2000
+      });
       
-      // Then set the appropriate sub-tab
-      if (room?.type === 'pve') {
-        // For PvE rooms, go directly to fight sub-tab
-        setBattleSubTab('fight');
-      } else {
-        // For PvP rooms, go to waiting room sub-tab
-        setBattleSubTab('waiting-room');
-      }
+      // Small delay to prevent navigation conflicts with toast
+      setTimeout(() => {
+        // Always navigate to Battle tab first
+        handleTabChange('battle');
+        
+        // Then set the appropriate sub-tab
+        if (room?.type === 'pve') {
+          // For PvE rooms, go directly to fight sub-tab
+          setBattleSubTab('fight');
+        } else {
+          // For PvP rooms, go to waiting room sub-tab
+          setBattleSubTab('waiting-room');
+        }
+      }, 100);
     }
   };
 
@@ -1248,72 +1280,67 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
             </div>
           </div>
           
-          {/* Chat Panel */}
-          <div className={`fixed top-0 right-0 h-full bg-gray-800 border-l border-blue-600 transition-transform duration-300 z-40 ${
-            chatCollapsed ? 'translate-x-full' : 'translate-x-0'
-          } w-80`}>
+          {/* Chat Panel - Small Separate Window */}
+          <div className={`fixed bottom-4 right-4 bg-gray-800 border border-blue-600 rounded-lg shadow-lg transition-all duration-300 z-40 ${
+            chatCollapsed ? 'w-12 h-12' : 'w-80 h-96'
+          }`}>
             {/* Chat Header */}
-            <div className="bg-blue-900 text-white p-3 flex items-center justify-between">
-              <h4 className="font-bold text-sm">
-                <i className="fas fa-comments mr-2"></i>
-                General Chat
-              </h4>
+            <div className="bg-blue-900 text-white p-2 flex items-center justify-between rounded-t-lg">
+              {!chatCollapsed && (
+                <h4 className="font-bold text-xs">
+                  <i className="fas fa-comments mr-1"></i>
+                  Chat
+                </h4>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => setChatCollapsed(!chatCollapsed)}
-                className="h-6 w-6 p-0 text-white hover:bg-blue-800"
+                className={`p-1 text-white hover:bg-blue-800 ${chatCollapsed ? 'w-full h-full rounded-lg' : 'h-5 w-5'}`}
               >
-                <i className={`fas ${chatCollapsed ? 'fa-chevron-left' : 'fa-chevron-right'} text-xs`}></i>
+                <i className={`fas ${chatCollapsed ? 'fa-comments' : 'fa-minus'} text-xs`}></i>
               </Button>
             </div>
             
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-2 bg-gray-900 text-xs" style={{ height: 'calc(100vh - 120px)' }}>
-              {chatMessages.map((msg) => (
-                <div key={msg.id} className="text-gray-400 mb-1">
-                  <span className={msg.type === 'system' ? 'text-blue-400' : 'text-green-400'}>
-                    [{msg.displayName}]
-                  </span> {msg.message}
-                </div>
-              ))}
-            </div>
+            {!chatCollapsed && (
+              <div className="flex-1 overflow-y-auto p-2 bg-gray-900 text-xs" style={{ height: '280px' }}>
+                {chatMessages.map((msg) => (
+                  <div key={msg.id} className="text-gray-400 mb-1">
+                    <span className={msg.type === 'system' ? 'text-blue-400' : 'text-green-400'}>
+                      [{msg.displayName}]
+                    </span> {msg.message}
+                  </div>
+                ))}
+              </div>
+            )}
             
             {/* Chat Input */}
-            <div className="p-2 bg-gray-800">
-              <div className="flex space-x-1">
-                <Input
-                  placeholder={isGuest ? "Login to chat" : "Type message..."}
-                  disabled={isGuest}
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  className="flex-1 h-8 text-xs bg-gray-700 border-gray-600 text-white"
-                />
-                <Button
-                  size="sm"
-                  disabled={isGuest || !chatMessage.trim()}
-                  onClick={handleSendMessage}
-                  className="h-8 px-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600"
-                >
-                  <i className="fas fa-paper-plane text-xs"></i>
-                </Button>
+            {!chatCollapsed && (
+              <div className="p-2 bg-gray-800 rounded-b-lg">
+                <div className="flex space-x-1">
+                  <Input
+                    placeholder={isGuest ? "Login to chat" : "Type message..."}
+                    disabled={isGuest}
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    className="flex-1 h-6 text-xs bg-gray-700 border-gray-600 text-white"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={isGuest || !chatMessage.trim()}
+                    onClick={handleSendMessage}
+                    className="h-6 px-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600"
+                  >
+                    <i className="fas fa-paper-plane text-xs"></i>
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
           
-          {/* Chat Collapse Button (when collapsed) */}
-          {chatCollapsed && (
-            <div className="fixed top-1/2 right-0 transform -translate-y-1/2 z-50">
-              <Button
-                size="sm"
-                onClick={() => setChatCollapsed(false)}
-                className="h-12 w-6 bg-blue-600 hover:bg-blue-700 rounded-l-lg rounded-r-none border-r-0"
-              >
-                <i className="fas fa-comments text-xs"></i>
-              </Button>
-            </div>
-          )}
+
         </div>
       </div>
 

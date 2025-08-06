@@ -200,10 +200,7 @@ export function useFirestore() {
         });
       }
       
-      toast({
-        title: "Success",
-        description: "Room created successfully!"
-      });
+      // Don't show toast here, let the calling component handle it to prevent navigation conflicts
       return docRef.id;
     } catch (error) {
       console.error('Error creating room:', error);
@@ -272,10 +269,7 @@ export function useFirestore() {
         });
       }
       
-      toast({
-        title: "Success",
-        description: "Joined room successfully!"
-      });
+      // Don't show toast here, let the calling component handle it to prevent navigation conflicts
       return true;
     } catch (error) {
       console.error('Error joining room:', error);
