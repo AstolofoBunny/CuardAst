@@ -27,6 +27,45 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [activeTab, setActiveTab] = useState(initialTab);
   const [battleSubTab, setBattleSubTab] = useState(initialBattleSubTab || 'waiting-room');
   const [location, navigate] = useLocation();
+  const { rooms, rankings, cards, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms } = useFirestore();
+  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
+  const [chatCollapsed, setChatCollapsed] = useState(true);
+  const [chatMessage, setChatMessage] = useState('');
+  const [chatMessages, setChatMessages] = useState([
+    { id: 1, user: 'System', message: 'Welcome to Battle Arena!', type: 'system' },
+    { id: 2, user: 'Player123', message: 'Looking for opponents!', type: 'user' },
+    { id: 3, user: 'Warrior99', message: 'Anyone want to battle?', type: 'user' }
+  ]);
+
+  // Room form state
+  const [roomForm, setRoomForm] = useState({
+    name: '',
+    type: 'pvp' as 'pvp' | 'pve',
+    description: ''
+  });
+
+  const displayUser = user || {
+    displayName: 'Guest',
+    email: 'guest@example.com',
+    uid: 'guest',
+    isAdmin: false,
+    wins: 0,
+    losses: 0,
+    hp: 20,
+    energy: 100,
+    deck: [],
+    createdAt: Date.now()
+  };
+
+  const isGuest = !user;
+
+  // Get current room data if user is in a room
+  const currentRoom = currentRoomId ? rooms.find(r => r.id === currentRoomId) : null;
+  
+  // Check if user already has a room (as host or player)
+  const userExistingRoom = user ? rooms.find(r => 
+    r.hostId === user.uid || r.players.includes(user.uid)
+  ) : null;
 
   // Update active tab based on URL
   useEffect(() => {
@@ -39,6 +78,13 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       setBattleSubTab(pathParts[1]);
     }
   }, [location]);
+
+  // Auto-sync existing room with battle tab
+  useEffect(() => {
+    if (userExistingRoom && !currentRoomId) {
+      setCurrentRoomId(userExistingRoom.id);
+    }
+  }, [userExistingRoom, currentRoomId]);
 
   // Handle chat message send
   const handleSendMessage = () => {
@@ -70,44 +116,17 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     setBattleSubTab(newSubTab);
     navigate(`/battle/${newSubTab}`);
   };
-  const { rooms, rankings, cards, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms } = useFirestore();
-  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
-  const [chatCollapsed, setChatCollapsed] = useState(true);
-  const [chatMessage, setChatMessage] = useState('');
-  const [chatMessages, setChatMessages] = useState([
-    { id: 1, user: 'System', message: 'Welcome to Battle Arena!', type: 'system' },
-    { id: 2, user: 'Player123', message: 'Looking for opponents!', type: 'user' },
-    { id: 3, user: 'Warrior99', message: 'Anyone want to battle?', type: 'user' }
-  ]);
-  const [roomForm, setRoomForm] = useState({
-    name: '',
-    type: 'pvp' as 'pvp' | 'pve',
-    description: ''
-  });
-
-  // Display user for guests
-  const displayUser = user || {
-    uid: 'guest',
-    email: 'guest@battlecard.local',
-    displayName: 'Guest',
-    isAdmin: false,
-    wins: 0,
-    losses: 0,
-    hp: 20,
-    energy: 100,
-    deck: [],
-    createdAt: Date.now()
-  };
-
-  const isGuest = !user;
-
-  // Get current room data if user is in a room
-  const currentRoom = currentRoomId ? rooms.find(r => r.id === currentRoomId) : null;
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user || !roomForm.name) return;
+    
+    // Check if user already has a room
+    if (userExistingRoom) {
+      alert('You already have a room. Leave your current room before creating a new one.');
+      return;
+    }
 
     const roomData: Omit<Room, 'id' | 'createdAt'> = {
       name: roomForm.name,
@@ -126,12 +145,16 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
         setRoomForm({ name: '', type: 'pvp', description: '' });
         setCurrentRoomId(roomId);
         
+        // Always navigate to Battle tab first
+        handleTabChange('battle');
+        
+        // Then set the appropriate sub-tab
         if (roomForm.type === 'pve') {
           // For PvE rooms, go directly to fight sub-tab
-          handleBattleSubTabChange('fight');
+          setBattleSubTab('fight');
         } else {
           // For PvP rooms, go to waiting room sub-tab to wait for opponent
-          handleBattleSubTabChange('waiting-room');
+          setBattleSubTab('waiting-room');
         }
       }
     } catch (error) {
@@ -145,16 +168,27 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       setShowAuthModal(true);
       return;
     }
+    
+    // Check if user already has a room
+    if (userExistingRoom) {
+      alert('You already have a room. Leave your current room before joining a new one.');
+      return;
+    }
     const success = await joinRoom(roomId, user!.uid);
     if (success) {
       setCurrentRoomId(roomId);
       const room = rooms.find(r => r.id === roomId);
+      
+      // Always navigate to Battle tab first
+      handleTabChange('battle');
+      
+      // Then set the appropriate sub-tab
       if (room?.type === 'pve') {
         // For PvE rooms, go directly to fight sub-tab
-        handleBattleSubTabChange('fight');
+        setBattleSubTab('fight');
       } else {
         // For PvP rooms, go to waiting room sub-tab
-        handleBattleSubTabChange('waiting-room');
+        setBattleSubTab('waiting-room');
       }
     }
   };
@@ -748,13 +782,41 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
             {activeTab === 'rooms' && (
               <div>
                 <div className="p-6">
+                  {userExistingRoom && (
+                    <Card className="bg-yellow-900 border-yellow-600 p-4 mb-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-bold text-yellow-400">You're already in: {userExistingRoom.name}</h4>
+                          <p className="text-sm text-yellow-200">
+                            {userExistingRoom.type === 'pvp' ? 'Player vs Player' : 'Player vs Environment'} • 
+                            {userExistingRoom.players.length}/{userExistingRoom.maxPlayers} players
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            handleTabChange('battle');
+                            setBattleSubTab(userExistingRoom.type === 'pve' ? 'fight' : 'waiting-room');
+                          }}
+                          className="bg-yellow-600 hover:bg-yellow-700"
+                        >
+                          <i className="fas fa-arrow-right mr-2"></i>
+                          Go to Battle
+                        </Button>
+                      </div>
+                    </Card>
+                  )}
+                  
                   <div className="mb-6 flex justify-between items-center">
                     <div>
                       <h2 className="text-3xl font-bold text-yellow-400 mb-2">
                         <i className="fas fa-users mr-2"></i>
                         Battle Rooms
                       </h2>
-                      <p className="text-gray-400">Join active battles or spectate ongoing matches</p>
+                      <p className="text-gray-400">
+                        {userExistingRoom 
+                          ? 'You can only be in one room at a time. Leave your current room to join another.'
+                          : 'Join active battles or spectate ongoing matches'}
+                      </p>
                     </div>
                     {user && user.isAdmin && (
                       <Button
@@ -813,9 +875,9 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                         <div className="flex gap-2">
                           <Button
                             onClick={() => handleJoinRoom(room.id)}
-                            disabled={isGuest || room.status !== 'waiting' || (user ? room.players.includes(user.uid) : false)}
+                            disabled={isGuest || room.status !== 'waiting' || (user ? room.players.includes(user.uid) : false) || (!!userExistingRoom && userExistingRoom.id !== room.id)}
                             className={`flex-1 font-bold py-3 transition-colors ${
-                              !isGuest && room.status === 'waiting' && (!user || !room.players.includes(user.uid))
+                              !isGuest && room.status === 'waiting' && (!user || !room.players.includes(user.uid)) && (!userExistingRoom || userExistingRoom.id === room.id)
                                 ? 'bg-red-600 hover:bg-red-700 text-white'
                                 : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                             }`}
@@ -824,6 +886,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                               <>
                                 <i className="fas fa-lock mr-2"></i>
                                 Login Required
+                              </>
+                            ) : userExistingRoom && userExistingRoom.id !== room.id ? (
+                              <>
+                                <i className="fas fa-ban mr-2"></i>
+                                In Another Room
                               </>
                             ) : user && room.players.includes(user.uid) ? (
                               <>
@@ -920,8 +987,36 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                         <i className="fas fa-plus mr-2"></i>
                         Create Battle Room
                       </h2>
-                      <p className="text-gray-400">Set up a new battle arena for other warriors</p>
+                      <p className="text-gray-400">
+                        {userExistingRoom 
+                          ? `You're currently in "${userExistingRoom.name}". Leave that room to create a new one.`
+                          : 'Set up a new battle arena for other warriors'}
+                      </p>
                     </div>
+
+                    {userExistingRoom && (
+                      <Card className="max-w-2xl mx-auto bg-yellow-900 border-yellow-600 p-4 mb-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-bold text-yellow-400">Active Room: {userExistingRoom.name}</h4>
+                            <p className="text-sm text-yellow-200">
+                              {userExistingRoom.type === 'pvp' ? 'Player vs Player' : 'Player vs Environment'} • 
+                              {userExistingRoom.players.length}/{userExistingRoom.maxPlayers} players
+                            </p>
+                          </div>
+                          <Button
+                            onClick={() => {
+                              handleTabChange('battle');
+                              setBattleSubTab(userExistingRoom.type === 'pve' ? 'fight' : 'waiting-room');
+                            }}
+                            className="bg-yellow-600 hover:bg-yellow-700"
+                          >
+                            <i className="fas fa-arrow-right mr-2"></i>
+                            Go to Room
+                          </Button>
+                        </div>
+                      </Card>
+                    )}
 
                     <Card className="max-w-2xl mx-auto bg-gray-800 border-blue-600 p-8">
                       <form onSubmit={handleCreateRoom} className="space-y-6">
@@ -989,14 +1084,21 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                       <div className="flex items-center justify-between pt-4">
                         <div className="text-sm text-gray-400">
                           <i className="fas fa-info-circle mr-1"></i>
-                          Your current deck will be used for this battle
+                          {userExistingRoom 
+                            ? `You're already in "${userExistingRoom.name}"` 
+                            : 'Your current deck will be used for this battle'}
                         </div>
                         <Button
                           type="submit"
-                          className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8"
+                          disabled={!!userExistingRoom}
+                          className={`${
+                            userExistingRoom 
+                              ? 'bg-gray-600 cursor-not-allowed' 
+                              : 'bg-red-600 hover:bg-red-700'
+                          } text-white font-bold py-3 px-8`}
                         >
                           <i className="fas fa-plus mr-2"></i>
-                          Create Room
+                          {userExistingRoom ? 'Already in Room' : 'Create Room'}
                         </Button>
                       </div>
                       </form>
