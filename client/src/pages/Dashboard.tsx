@@ -163,6 +163,36 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }
   };
 
+  // Draw card from deck
+  const drawCardFromDeck = () => {
+    if (!isPlayerTurn) return;
+    if (playerHand.length >= 5) {
+      console.log('Hand is full, cannot draw more cards');
+      return;
+    }
+    if (playerDeck.length === 0) {
+      console.log('Deck is empty, cannot draw cards');
+      return;
+    }
+    if (playerEnergy < 5) {
+      console.log('Not enough energy to draw card');
+      return;
+    }
+
+    // Draw top card from deck to hand
+    const topCard = playerDeck[0];
+    setPlayerHand(prev => [...prev, topCard]);
+    setPlayerDeck(prev => prev.slice(1));
+    setPlayerEnergy(prev => Math.max(0, prev - 5));
+    
+    console.log('Card drawn from deck! Energy cost: 5');
+    
+    // Check if energy is 0 and auto-end turn
+    if (playerEnergy - 5 <= 0) {
+      setTimeout(() => endPlayerTurn(), 1000);
+    }
+  };
+
   // Place battle card on field
   const placeBattleCard = (position: 'left' | 'center' | 'right') => {
     if (!selectedCard) return;
@@ -235,9 +265,9 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     
     // AI/Enemy turn simulation (simplified)
     setTimeout(() => {
-      // Reset energy for next round and switch back to player
-      setPlayerEnergy(100);
-      setEnemyEnergy(100);
+      // Replenish 15 energy for next round and switch back to player
+      setPlayerEnergy(prev => Math.min(100, prev + 15));
+      setEnemyEnergy(prev => Math.min(100, prev + 15));
       setBattleCardsPlayedThisRound(0);
       setCurrentRound(prev => prev + 1);
       setIsPlayerTurn(true);
@@ -669,17 +699,14 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                   ))}
                                 </div>
 
-                                <div className="text-center py-4">
+                                <div className="text-center py-4 relative">
                                   <div className="text-xl font-bold text-yellow-400 mb-1">⚔ BATTLE ARENA ⚔</div>
                                   <div className="text-sm text-yellow-300">{isPlayerTurn ? 'Your Turn' : 'Enemy Turn'} - {isPlayerTurn ? 'Place cards or cast spells' : 'Wait for enemy'}</div>
-                                </div>
-                                
-                                {/* Round and Turn Indicator */}
-                                <div className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-gray-800 border border-yellow-600 rounded-lg p-3">
-                                  <div className="text-center">
-                                    <div className="text-lg font-bold text-yellow-400">Round {currentRound}</div>
-                                    <div className="text-xs text-gray-300 mt-1">Battle Cards: {battleCardsPlayedThisRound}/1</div>
-                                    <div className="text-xs text-blue-300">Energy: {playerEnergy}/100</div>
+                                  
+                                  {/* Round indicator on battlefield */}
+                                  <div className="absolute left-4 top-4 bg-orange-600 bg-opacity-80 border border-orange-400 rounded px-3 py-1">
+                                    <div className="text-sm font-bold text-white">Round {currentRound}</div>
+                                    <div className="text-xs text-orange-200">Battle Cards: {battleCardsPlayedThisRound}/1</div>
                                   </div>
                                 </div>
 
@@ -703,6 +730,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                                 <div className="text-center p-1">
                                                   <div className="text-xs font-bold text-white mb-1">{placedCard.name}</div>
                                                   <div className="text-xs text-blue-200">⚔{placedCard.attack || 0}</div>
+                                                  <div className="text-xs text-blue-200">🛡{placedCard.defense || 0}</div>
                                                   <div className="text-xs text-blue-200">❤{placedCard.health || 1}</div>
                                                 </div>
                                               </div>
@@ -711,6 +739,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                             <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-1">
                                               <div className="flex justify-between">
                                                 <span>⚔{placedCard.attack || 0}</span>
+                                                <span>🛡{placedCard.defense || 0}</span>
                                                 <span>❤{placedCard.health || 1}</span>
                                               </div>
                                             </div>
@@ -751,13 +780,43 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                     <h3 className="text-sm font-bold text-blue-400 mb-2">Deck ({playerDeck.length})</h3>
                                     <div className="relative">
                                       {playerDeck.length > 0 ? (
-                                        <div className="relative">
+                                        <div 
+                                          className="relative cursor-pointer group"
+                                          onClick={drawCardFromDeck}
+                                        >
                                           {/* Stack effect - multiple cards */}
                                           <div className="absolute w-20 h-28 bg-gray-700 rounded border-2 border-gray-600 transform translate-x-1 translate-y-1"></div>
                                           <div className="absolute w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 transform translate-x-0.5 translate-y-0.5"></div>
-                                          <div className="w-20 h-28 bg-blue-800 rounded border-2 border-blue-600 flex items-center justify-center relative z-10">
-                                            <span className="text-xs text-blue-200 font-bold">DECK</span>
+                                          <div className={`w-20 h-28 rounded border-2 flex items-center justify-center relative z-10 transition-all ${
+                                            playerHand.length >= 5 || playerEnergy < 5 || !isPlayerTurn
+                                              ? 'bg-gray-800 border-gray-600 cursor-not-allowed' 
+                                              : 'bg-blue-800 border-blue-600 hover:bg-blue-700 group-hover:transform group-hover:-translate-y-1'
+                                          }`}>
+                                            <div className="text-center">
+                                              <div className="text-xs text-blue-200 font-bold">DECK</div>
+                                              <div className="text-xs text-blue-300">{playerDeck.length}</div>
+                                              {playerHand.length < 5 && playerEnergy >= 5 && isPlayerTurn && (
+                                                <div className="text-xs text-yellow-300 mt-1">5 Energy</div>
+                                              )}
+                                            </div>
                                           </div>
+                                          
+                                          {/* Draw tooltip */}
+                                          {playerDeck.length > 0 && (
+                                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-20 bg-gray-800 border border-blue-400 rounded p-2 text-xs whitespace-nowrap">
+                                              <div className="text-center">
+                                                {playerHand.length >= 5 ? (
+                                                  <div className="text-red-400">Hand Full (5/5)</div>
+                                                ) : playerEnergy < 5 ? (
+                                                  <div className="text-red-400">Need 5 Energy</div>
+                                                ) : !isPlayerTurn ? (
+                                                  <div className="text-gray-400">Not Your Turn</div>
+                                                ) : (
+                                                  <div className="text-green-400">Draw Card (5 Energy)</div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
                                         </div>
                                       ) : (
                                         <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 flex items-center justify-center">
