@@ -12,6 +12,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (January 2025)
 
+### Battle System Reorganization (January 6, 2025)
+- **Battle Tab Restructure**: Moved "Waiting Room" and "Fight" tabs into sub-tabs within the Battle tab for better organization
+- **Individual Waiting Rooms**: Each player now has their own personalized waiting room view showing:
+  - Host on the left with crown icon (always visible)
+  - Current player or "waiting for opponent" on the right 
+  - Proper avatar and nickname display based on room state
+- **Enhanced Navigation**: Battle sub-tabs use URL structure `/battle/waiting-room` and `/battle/fight`
+- **Improved User Experience**: Single Battle tab contains all battle-related functionality with clear sub-navigation
+- **URL Persistence**: Battle sub-tab state is maintained across page refreshes and browser navigation
+
 ### Migration Fixes (January 5, 2025)
 - **Admin Panel Fixed**: Resolved missing Label import causing admin panel to break for admin users
 - **Profile Settings Enhanced**: Fixed profile picture reset issue when editing display name - form now syncs properly with user data changes

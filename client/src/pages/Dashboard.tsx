@@ -18,18 +18,26 @@ import { Link, useLocation } from 'wouter';
 interface DashboardProps {
   user: any;
   activeTab?: string;
+  battleSubTab?: string;
 }
 
-export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: DashboardProps) {
+export default function Dashboard({ user, activeTab: initialTab = 'ranking', battleSubTab: initialBattleSubTab }: DashboardProps) {
   const { logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [battleSubTab, setBattleSubTab] = useState(initialBattleSubTab || 'waiting-room');
   const [location, navigate] = useLocation();
 
   // Update active tab based on URL
   useEffect(() => {
-    const path = location.split('/')[1] || 'ranking';
-    setActiveTab(path);
+    const pathParts = location.split('/').filter(part => part);
+    const mainTab = pathParts[0] || 'ranking';
+    setActiveTab(mainTab);
+    
+    // Handle battle sub-tabs
+    if (mainTab === 'battle' && pathParts[1]) {
+      setBattleSubTab(pathParts[1]);
+    }
   }, [location]);
 
   // Handle chat message send
@@ -50,7 +58,17 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
   // Handle tab changes with navigation
   const handleTabChange = (newTab: string) => {
     setActiveTab(newTab);
-    navigate(`/${newTab === 'ranking' ? '' : newTab}`);
+    if (newTab === 'battle') {
+      navigate(`/battle/${battleSubTab}`);
+    } else {
+      navigate(`/${newTab === 'ranking' ? '' : newTab}`);
+    }
+  };
+
+  // Handle battle sub-tab changes
+  const handleBattleSubTabChange = (newSubTab: string) => {
+    setBattleSubTab(newSubTab);
+    navigate(`/battle/${newSubTab}`);
   };
   const { rooms, rankings, cards, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms } = useFirestore();
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
@@ -109,11 +127,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
         setCurrentRoomId(roomId);
         
         if (roomForm.type === 'pve') {
-          // For PvE rooms, go directly to fight tab
-          handleTabChange('fight');
+          // For PvE rooms, go directly to fight sub-tab
+          handleBattleSubTabChange('fight');
         } else {
-          // For PvP rooms, go to waiting room tab to wait for opponent
-          handleTabChange('waiting-room');
+          // For PvP rooms, go to waiting room sub-tab to wait for opponent
+          handleBattleSubTabChange('waiting-room');
         }
       }
     } catch (error) {
@@ -132,11 +150,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
       setCurrentRoomId(roomId);
       const room = rooms.find(r => r.id === roomId);
       if (room?.type === 'pve') {
-        // For PvE rooms, go directly to fight tab
-        handleTabChange('fight');
+        // For PvE rooms, go directly to fight sub-tab
+        handleBattleSubTabChange('fight');
       } else {
-        // For PvP rooms, go to waiting room tab
-        handleTabChange('waiting-room');
+        // For PvP rooms, go to waiting room sub-tab
+        handleBattleSubTabChange('waiting-room');
       }
     }
   };
@@ -239,20 +257,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                 <i className="fas fa-layer-group mr-3"></i>
                 My Deck {isGuest && '(Login Required)'}
               </TabsTrigger>
-              <TabsTrigger
-                value="waiting-room"
-                className="w-full justify-start px-4 py-3 data-[state=active]:bg-orange-600 data-[state=active]:text-white text-gray-300 hover:text-white"
-              >
-                <i className="fas fa-hourglass-half mr-3"></i>
-                Waiting Room
-              </TabsTrigger>
-              <TabsTrigger
-                value="fight"
-                className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
-              >
-                <i className="fas fa-fist-raised mr-3"></i>
-                Fight
-              </TabsTrigger>
+
               <TabsTrigger
                 value="create-room"
                 disabled={isGuest}
@@ -280,7 +285,270 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
           <div className={`transition-all duration-300 ${chatCollapsed ? 'flex-1' : 'flex-1 mr-80'}`}>
             <div className="w-full">
             {/* Render content based on active tab */}
-            {activeTab === 'battle' && !currentRoom && (
+            {activeTab === 'battle' && (
+              <div>
+                <div className="p-6">
+                  <div className="mb-6">
+                    <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                      <i className="fas fa-sword mr-2"></i>
+                      Battle Arena
+                    </h2>
+                    <p className="text-gray-400">Battle management and combat</p>
+                  </div>
+
+                  {/* Battle Sub-tabs */}
+                  <div className="mb-6">
+                    <Tabs value={battleSubTab} onValueChange={handleBattleSubTabChange} className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="waiting-room" className="data-[state=active]:bg-orange-600">
+                          <i className="fas fa-hourglass-half mr-2"></i>
+                          Waiting Room
+                        </TabsTrigger>
+                        <TabsTrigger value="fight" className="data-[state=active]:bg-red-600">
+                          <i className="fas fa-fist-raised mr-2"></i>
+                          Fight
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="waiting-room" className="mt-6">
+                        {/* Waiting Room Content */}
+                        <Card className="bg-gray-800 border-orange-600 p-8">
+                          {currentRoom ? (
+                            <div className="text-center mb-8">
+                              <h3 className="text-2xl font-bold text-orange-400 mb-4">
+                                Room: {currentRoom.name}
+                              </h3>
+                              <p className="text-gray-400 mb-6">
+                                {currentRoom.description || 'Waiting for battle to begin'}
+                              </p>
+                              
+                              <div className="grid grid-cols-2 gap-6 max-w-md mx-auto">
+                                {/* Host Player (always on left) */}
+                                <div className="bg-gray-700 rounded-lg p-4">
+                                  <div className="w-16 h-16 bg-blue-600 rounded-full mx-auto mb-3 flex items-center justify-center">
+                                    <i className="fas fa-crown text-yellow-400 text-xl"></i>
+                                  </div>
+                                  <h4 className="font-bold text-blue-400">
+                                    {currentRoom.hostName}
+                                  </h4>
+                                  <p className="text-sm text-gray-400">Host</p>
+                                </div>
+
+                                {/* Second Player or Waiting */}
+                                <div className="bg-gray-700 rounded-lg p-4">
+                                  {currentRoom.players && currentRoom.players.length > 1 ? (
+                                    <>
+                                      <div className="w-16 h-16 bg-red-600 rounded-full mx-auto mb-3 flex items-center justify-center">
+                                        <i className="fas fa-user text-white text-xl"></i>
+                                      </div>
+                                      <h4 className="font-bold text-red-400">
+                                        {/* Show the other player's name if current user is host, otherwise show current user */}
+                                        {user && currentRoom.hostId === user.uid 
+                                          ? 'Player 2' 
+                                          : user?.displayName || 'You'}
+                                      </h4>
+                                      <p className="text-sm text-gray-400">Player</p>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="w-16 h-16 bg-gray-600 rounded-full mx-auto mb-3 flex items-center justify-center animate-pulse">
+                                        <i className="fas fa-hourglass-half text-gray-400 text-xl"></i>
+                                      </div>
+                                      <h4 className="font-bold text-gray-400">Waiting...</h4>
+                                      <p className="text-sm text-gray-500">For opponent</p>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="mt-8">
+                                {currentRoom.players && currentRoom.players.length > 1 ? (
+                                  <Button
+                                    onClick={() => handleBattleSubTabChange('fight')}
+                                    size="lg" 
+                                    className="bg-red-600 hover:bg-red-700 text-xl px-8 py-3"
+                                  >
+                                    <i className="fas fa-play mr-2"></i>
+                                    START BATTLE
+                                  </Button>
+                                ) : (
+                                  <div className="text-gray-400">
+                                    <i className="fas fa-clock mr-2"></i>
+                                    Waiting for another player to join...
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="mt-6">
+                                <Button
+                                  onClick={() => {
+                                    setCurrentRoomId(null);
+                                    handleTabChange('ranking');
+                                  }}
+                                  variant="outline"
+                                  className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                                >
+                                  <i className="fas fa-arrow-left mr-2"></i>
+                                  Leave Room
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center">
+                              <div className="w-20 h-20 bg-gray-700 rounded-full mx-auto mb-4 flex items-center justify-center">
+                                <i className="fas fa-door-open text-gray-400 text-3xl"></i>
+                              </div>
+                              <h3 className="text-xl font-bold text-gray-400 mb-2">No Active Room</h3>
+                              <p className="text-gray-500 mb-6">Create or join a room to start waiting for battle</p>
+                              
+                              <div className="flex justify-center space-x-4">
+                                <Button
+                                  onClick={() => handleTabChange('rooms')}
+                                  className="bg-blue-600 hover:bg-blue-700 px-6 py-3"
+                                >
+                                  <i className="fas fa-search mr-2"></i>
+                                  Find Room
+                                </Button>
+                                <Button
+                                  onClick={() => handleTabChange('create-room')}
+                                  disabled={isGuest}
+                                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-6 py-3"
+                                >
+                                  <i className="fas fa-plus mr-2"></i>
+                                  Create Room
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </Card>
+                      </TabsContent>
+
+                      <TabsContent value="fight" className="mt-6">
+                        {/* Fight Content */}
+                        <Card className="bg-gray-800 border-red-600 p-8">
+                          {currentRoom ? (
+                            <div className="text-center mb-8">
+                              <h3 className="text-2xl font-bold text-red-400 mb-4">
+                                Fighting in: {currentRoom.name}
+                              </h3>
+                              
+                              <div className="w-full h-96 bg-gradient-to-b from-red-900 to-gray-900 rounded-lg mb-6 flex items-center justify-center border-2 border-red-400">
+                                <div className="text-4xl font-bold text-red-400">FIGHT ARENA - ACTIVE BATTLE</div>
+                              </div>
+
+                              {/* Opponent Cards (Top) */}
+                              <div className="mb-6">
+                                <h3 className="text-lg font-bold text-red-400 mb-3">Opponent Hand</h3>
+                                <div className="flex space-x-2 justify-center">
+                                  {[1, 2, 3, 4, 5].map((card) => (
+                                    <div key={card} className="w-16 h-24 bg-red-600 rounded border-2 border-red-400 flex items-center justify-center">
+                                      <span className="text-xs font-bold">?</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Battlefield */}
+                              <div className="bg-gradient-to-r from-yellow-900 to-orange-900 rounded-lg p-4 mb-6 border-2 border-yellow-600">
+                                <h3 className="text-center text-lg font-bold text-yellow-400 mb-4">BATTLEFIELD</h3>
+                                <div className="grid grid-cols-3 gap-4">
+                                  {/* Opponent Battlefield */}
+                                  <div className="text-center">
+                                    <div className="w-20 h-28 bg-red-700 rounded border-2 border-red-500 mx-auto mb-2 flex items-center justify-center">
+                                      <span className="text-sm font-bold">Enemy</span>
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
+                                      <span className="text-xs">Empty</span>
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
+                                      <span className="text-xs">Empty</span>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Your Battlefield */}
+                                  <div className="text-center">
+                                    <div className="w-20 h-28 bg-blue-700 rounded border-2 border-blue-500 mx-auto mb-2 flex items-center justify-center">
+                                      <span className="text-sm font-bold">Your</span>
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
+                                      <span className="text-xs">Empty</span>
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
+                                      <span className="text-xs">Empty</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Your Cards (Bottom) */}
+                              <div className="mb-6">
+                                <h3 className="text-lg font-bold text-blue-400 mb-3">Your Hand</h3>
+                                <div className="flex space-x-2 justify-center">
+                                  {[1, 2, 3, 4, 5].map((card) => (
+                                    <div key={card} className="w-16 h-24 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center cursor-pointer hover:bg-blue-500">
+                                      <span className="text-xs font-bold">{card}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Battle Controls */}
+                              <div className="flex justify-center mt-6 space-x-4">
+                                <Button className="bg-green-600 hover:bg-green-700 px-6">
+                                  <i className="fas fa-play mr-2"></i>
+                                  End Turn
+                                </Button>
+                                <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-700 px-6">
+                                  <i className="fas fa-shield mr-2"></i>
+                                  Defend
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setCurrentRoomId(null);
+                                    handleTabChange('ranking');
+                                  }}
+                                  variant="destructive"
+                                  className="px-6"
+                                >
+                                  <i className="fas fa-flag mr-2"></i>
+                                  Surrender
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center">
+                              <div className="w-20 h-20 bg-gray-700 rounded-full mx-auto mb-4 flex items-center justify-center">
+                                <i className="fas fa-swords text-gray-400 text-3xl"></i>
+                              </div>
+                              <h3 className="text-xl font-bold text-gray-400 mb-2">No Active Battle</h3>
+                              <p className="text-gray-500 mb-6">Join a room and start a battle first</p>
+                              
+                              <Button
+                                onClick={() => handleBattleSubTabChange('waiting-room')}
+                                className="bg-orange-600 hover:bg-orange-700 px-6 py-3"
+                              >
+                                <i className="fas fa-hourglass-half mr-2"></i>
+                                Go to Waiting Room
+                              </Button>
+                            </div>
+                          )}
+                        </Card>
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'battle-old-removed' && !currentRoom && (
               <div>
                 <div className="p-6">
                   <div className="mb-6">
@@ -317,7 +585,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                         Create Room
                       </Button>
                       <Button
-                        onClick={() => handleTabChange('waiting-room')}
+                        onClick={() => handleBattleSubTabChange('waiting-room')}
                         className="bg-yellow-600 hover:bg-yellow-700 px-6 py-3"
                       >
                         <i className="fas fa-hourglass-half mr-2"></i>
@@ -415,92 +683,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
               </div>
             )}
 
-            {/* Waiting Room Tab */}
-            {activeTab === 'waiting-room' && (
-              <div>
-                <div className="p-6">
-                  <div className="mb-6">
-                    <h2 className="text-3xl font-bold text-orange-400 mb-2">
-                      <i className="fas fa-hourglass-half mr-2"></i>
-                      Waiting Room
-                    </h2>
-                    <p className="text-gray-400">
-                      {currentRoom ? `Room: ${currentRoom.name}` : 'Waiting for room data...'}
-                    </p>
-                  </div>
 
-                  <Card className="bg-gray-800 border-orange-600 p-8">
-                    <div className="text-center mb-8">
-                      <h3 className="text-2xl font-bold text-orange-400 mb-4">
-                        {currentRoom ? `Room: ${currentRoom.name}` : 'Test Waiting Room'}
-                      </h3>
-                      <p className="text-gray-400 mb-6">
-                        {currentRoom ? currentRoom.description : 'This is a test room to show the waiting functionality'}
-                      </p>
-                      
-                      <div className="grid grid-cols-2 gap-6 max-w-md mx-auto">
-                        {/* Host Player */}
-                        <div className="bg-gray-700 rounded-lg p-4">
-                          <div className="w-16 h-16 bg-blue-600 rounded-full mx-auto mb-3 flex items-center justify-center">
-                            <i className="fas fa-crown text-yellow-400 text-xl"></i>
-                          </div>
-                          <h4 className="font-bold text-blue-400">
-                            {currentRoom ? currentRoom.hostName : 'Test Host'}
-                          </h4>
-                          <p className="text-sm text-gray-400">Host</p>
-                        </div>
-
-                        {/* Second Player or Waiting */}
-                        <div className="bg-gray-700 rounded-lg p-4">
-                          {currentRoom && currentRoom.players && currentRoom.players.length > 1 ? (
-                            <>
-                              <div className="w-16 h-16 bg-red-600 rounded-full mx-auto mb-3 flex items-center justify-center">
-                                <i className="fas fa-user text-white text-xl"></i>
-                              </div>
-                              <h4 className="font-bold text-red-400">Player 2</h4>
-                              <p className="text-sm text-gray-400">Ready</p>
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-16 h-16 bg-gray-600 rounded-full mx-auto mb-3 flex items-center justify-center animate-pulse">
-                                <i className="fas fa-hourglass-half text-gray-400 text-xl"></i>
-                              </div>
-                              <h4 className="font-bold text-gray-400">Waiting...</h4>
-                              <p className="text-sm text-gray-500">For opponent</p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="mt-8">
-                        <Button
-                          onClick={() => handleTabChange('fight')}
-                          size="lg" 
-                          className="bg-red-600 hover:bg-red-700 text-xl px-8 py-3"
-                        >
-                          <i className="fas fa-play mr-2"></i>
-                          START BATTLE
-                        </Button>
-                      </div>
-
-                      <div className="mt-6">
-                        <Button
-                          onClick={() => {
-                            setCurrentRoomId(null);
-                            handleTabChange('ranking');
-                          }}
-                          variant="outline"
-                          className="border-gray-600 text-gray-300 hover:bg-gray-700"
-                        >
-                          <i className="fas fa-arrow-left mr-2"></i>
-                          Leave Room
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-              </div>
-            )}
 
             {activeTab === 'ranking' && (
               <div>
@@ -820,118 +1003,6 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking' }: D
                     </Card>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Fight Tab */}
-            {activeTab === 'fight' && (
-              <div>
-                <div className="p-6">
-                  <div className="mb-6">
-                    <h2 className="text-3xl font-bold text-red-400 mb-2">
-                      <i className="fas fa-fist-raised mr-2"></i>
-                      Fight Arena
-                    </h2>
-                    <p className="text-gray-400">
-                      {currentRoom ? `Fighting in: ${currentRoom.name}` : 'Battle Arena - Test Fight'}
-                    </p>
-                  </div>
-
-                  <Card className="bg-gray-800 border-red-600 p-8">
-                    <div className="text-center mb-8">
-                      <div className="w-full h-96 bg-gradient-to-b from-red-900 to-gray-900 rounded-lg mb-6 flex items-center justify-center border-2 border-red-400">
-                        <div className="text-4xl font-bold text-red-400">FIGHT ARENA - ACTIVE BATTLE</div>
-                      </div>
-                    </div>
-
-                    {/* Opponent Cards (Top) */}
-                    <div className="mb-6">
-                      <h3 className="text-lg font-bold text-red-400 mb-3">Opponent Hand</h3>
-                      <div className="flex space-x-2 justify-center">
-                        {[1, 2, 3, 4, 5].map((card) => (
-                          <div key={card} className="w-16 h-24 bg-red-600 rounded border-2 border-red-400 flex items-center justify-center">
-                            <span className="text-xs font-bold">?</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Battlefield */}
-                    <div className="bg-gradient-to-r from-yellow-900 to-orange-900 rounded-lg p-4 mb-6 border-2 border-yellow-600">
-                      <h3 className="text-center text-lg font-bold text-yellow-400 mb-4">BATTLEFIELD</h3>
-                      <div className="grid grid-cols-3 gap-4">
-                        {/* Opponent Battlefield */}
-                        <div className="text-center">
-                          <div className="w-20 h-28 bg-red-700 rounded border-2 border-red-500 mx-auto mb-2 flex items-center justify-center">
-                            <span className="text-sm font-bold">Enemy</span>
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
-                            <span className="text-xs">Empty</span>
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
-                            <span className="text-xs">Empty</span>
-                          </div>
-                        </div>
-                        
-                        {/* Your Battlefield */}
-                        <div className="text-center">
-                          <div className="w-20 h-28 bg-blue-700 rounded border-2 border-blue-500 mx-auto mb-2 flex items-center justify-center">
-                            <span className="text-sm font-bold">Your</span>
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
-                            <span className="text-xs">Empty</span>
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <div className="w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 mx-auto mb-2 flex items-center justify-center">
-                            <span className="text-xs">Empty</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Your Cards (Bottom) */}
-                    <div className="mb-6">
-                      <h3 className="text-lg font-bold text-blue-400 mb-3">Your Hand</h3>
-                      <div className="flex space-x-2 justify-center">
-                        {[1, 2, 3, 4, 5].map((card) => (
-                          <div key={card} className="w-16 h-24 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center cursor-pointer hover:bg-blue-500">
-                            <span className="text-xs font-bold">{card}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Battle Controls */}
-                    <div className="flex justify-center mt-6 space-x-4">
-                      <Button className="bg-green-600 hover:bg-green-700 px-6">
-                        <i className="fas fa-play mr-2"></i>
-                        End Turn
-                      </Button>
-                      <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-700 px-6">
-                        <i className="fas fa-shield mr-2"></i>
-                        Defend
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          setCurrentRoomId(null);
-                          handleTabChange('ranking');
-                        }}
-                        variant="destructive"
-                        className="px-6"
-                      >
-                        <i className="fas fa-flag mr-2"></i>
-                        Surrender
-                      </Button>
-                    </div>
-                  </Card>
-                </div>
               </div>
             )}
 
