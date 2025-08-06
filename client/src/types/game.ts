@@ -158,6 +158,15 @@ export interface RankingEntry {
   winRate: number;
 }
 
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  displayName: string;
+  message: string;
+  timestamp: number;
+  type: 'user' | 'system';
+}
+
 export type GamePhase = 'auth' | 'dashboard' | 'battle';
 
 export interface GameState {

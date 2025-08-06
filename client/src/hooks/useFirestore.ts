@@ -17,13 +17,14 @@ import {
   DocumentData
 } from 'firebase/firestore';
 import { db, BASE_CARDS } from '@/lib/firebase';
-import { GameCard, Room, Battle, RankingEntry } from '@/types/game';
+import { GameCard, Room, Battle, RankingEntry, ChatMessage } from '@/types/game';
 import { useToast } from '@/hooks/use-toast';
 
 export function useFirestore() {
   const [cards, setCards] = useState<GameCard[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [rankings, setRankings] = useState<RankingEntry[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -128,6 +129,25 @@ export function useFirestore() {
 
     return () => unsubscribe();
   }, [toast]);
+
+  // Listen to chat messages
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      query(collection(db, 'chatMessages'), orderBy('timestamp', 'asc'), limit(50)),
+      (snapshot: QuerySnapshot<DocumentData>) => {
+        const messagesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as ChatMessage[];
+        setChatMessages(messagesData);
+      },
+      (error: any) => {
+        console.error('Error fetching chat messages:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   const createRoom = async (roomData: Omit<Room, 'id' | 'createdAt'>) => {
     try {
@@ -520,10 +540,39 @@ export function useFirestore() {
     }
   };
 
+  // Send chat message
+  const sendChatMessage = async (userId: string, displayName: string, message: string) => {
+    try {
+      await addDoc(collection(db, 'chatMessages'), {
+        userId,
+        displayName,
+        message,
+        timestamp: Date.now(),
+        type: 'user'
+      });
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send message",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Shuffle deck and distribute cards for battle
+  const distributeCards = (deck: string[]) => {
+    const shuffledDeck = [...deck].sort(() => Math.random() - 0.5);
+    const hand = shuffledDeck.slice(0, 5);
+    const remainingDeck = shuffledDeck.slice(5);
+    return { hand, remainingDeck };
+  };
+
   return {
     cards,
     rooms,
     rankings,
+    chatMessages,
     loading,
     createRoom,
     joinRoom,
@@ -535,6 +584,8 @@ export function useFirestore() {
     createBattle,
     updateBattle,
     updateUserDeck,
-    createTestRooms
+    createTestRooms,
+    sendChatMessage,
+    distributeCards
   };
 }

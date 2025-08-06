@@ -27,15 +27,12 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [activeTab, setActiveTab] = useState(initialTab);
   const [battleSubTab, setBattleSubTab] = useState(initialBattleSubTab || 'waiting-room');
   const [location, navigate] = useLocation();
-  const { rooms, rankings, cards, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms } = useFirestore();
+  const { rooms, rankings, cards, chatMessages, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms, sendChatMessage, distributeCards } = useFirestore();
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
   const [chatCollapsed, setChatCollapsed] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
-  const [chatMessages, setChatMessages] = useState([
-    { id: 1, user: 'System', message: 'Welcome to Battle Arena!', type: 'system' },
-    { id: 2, user: 'Player123', message: 'Looking for opponents!', type: 'user' },
-    { id: 3, user: 'Warrior99', message: 'Anyone want to battle?', type: 'user' }
-  ]);
+  const [playerHand, setPlayerHand] = useState<string[]>([]);
+  const [playerDeck, setPlayerDeck] = useState<string[]>([]);
 
   // Room form state
   const [roomForm, setRoomForm] = useState({
@@ -83,21 +80,21 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   useEffect(() => {
     if (userExistingRoom && !currentRoomId) {
       setCurrentRoomId(userExistingRoom.id);
+      
+      // Initialize hand and deck for fight when room is set
+      if (user && user.deck && user.deck.length >= 10) {
+        const { hand, remainingDeck } = distributeCards(user.deck);
+        setPlayerHand(hand);
+        setPlayerDeck(remainingDeck);
+      }
     }
-  }, [userExistingRoom, currentRoomId]);
+  }, [userExistingRoom, currentRoomId, user, distributeCards]);
 
   // Handle chat message send
-  const handleSendMessage = () => {
-    if (!chatMessage.trim() || isGuest) return;
+  const handleSendMessage = async () => {
+    if (!chatMessage.trim() || isGuest || !user) return;
     
-    const newMessage = {
-      id: Date.now(),
-      user: displayUser.displayName || 'Anonymous',
-      message: chatMessage.trim(),
-      type: 'user' as const
-    };
-    
-    setChatMessages(prev => [...prev, newMessage]);
+    await sendChatMessage(user.uid, user.displayName || 'Anonymous', chatMessage.trim());
     setChatMessage('');
   };
 
@@ -524,13 +521,40 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
                               {/* Your Cards (Bottom) */}
                               <div className="mb-6">
-                                <h3 className="text-lg font-bold text-blue-400 mb-3">Your Hand</h3>
+                                <div className="flex justify-between items-center mb-3">
+                                  <h3 className="text-lg font-bold text-blue-400">Your Hand</h3>
+                                  <div className="text-sm text-blue-300">
+                                    Deck: {playerDeck.length} cards
+                                  </div>
+                                </div>
                                 <div className="flex space-x-2 justify-center">
-                                  {[1, 2, 3, 4, 5].map((card) => (
-                                    <div key={card} className="w-16 h-24 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center cursor-pointer hover:bg-blue-500">
-                                      <span className="text-xs font-bold">{card}</span>
-                                    </div>
-                                  ))}
+                                  {playerHand.length > 0 ? (
+                                    playerHand.map((cardId, index) => {
+                                      const card = cards.find(c => c.id === cardId);
+                                      return (
+                                        <div key={cardId || index} className="w-16 h-24 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center cursor-pointer hover:bg-blue-500 relative group">
+                                          <span className="text-xs font-bold text-center px-1">
+                                            {card?.name || `Card ${index + 1}`}
+                                          </span>
+                                          {card && (
+                                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 bg-gray-800 border border-blue-400 rounded p-2 text-xs whitespace-nowrap">
+                                              <div className="font-bold">{card.name}</div>
+                                              <div>Type: {card.type}</div>
+                                              {card.attack && <div>Attack: {card.attack}</div>}
+                                              {card.health && <div>Health: {card.health}</div>}
+                                              {card.cost && <div>Cost: {card.cost}</div>}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })
+                                  ) : (
+                                    [1, 2, 3, 4, 5].map((placeholder) => (
+                                      <div key={placeholder} className="w-16 h-24 bg-gray-600 rounded border-2 border-gray-500 flex items-center justify-center">
+                                        <span className="text-xs text-gray-400">No Deck</span>
+                                      </div>
+                                    ))
+                                  )}
                                 </div>
                               </div>
 
@@ -631,91 +655,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
               </div>
             )}
 
-            {activeTab === 'battle' && currentRoom && (
-              <div>
-                <div className="p-6">
-                  <div className="mb-6">
-                    <h2 className="text-3xl font-bold text-yellow-400 mb-2">
-                      <i className="fas fa-sword mr-2"></i>
-                      Battle Arena
-                    </h2>
-                    <p className="text-gray-400">Room: {currentRoom.name}</p>
-                  </div>
 
-                  <Card className="bg-gray-800 border-red-600 p-8">
-                    <div className="text-center mb-8">
-                      <div className="w-full h-96 bg-gradient-to-b from-blue-900 to-green-900 rounded-lg mb-6 flex items-center justify-center border-2 border-yellow-400">
-                        <div className="text-4xl font-bold text-yellow-400">BATTLEFIELD IMAGE PLACEHOLDER</div>
-                      </div>
-                    </div>
-
-                    {/* Player 1 Cards (Bottom) */}
-                    <div className="mb-6">
-                      <h3 className="text-lg font-bold text-blue-400 mb-3">Your Hand</h3>
-                      <div className="flex space-x-2 justify-center">
-                        {[1, 2, 3, 4, 5].map((card) => (
-                          <div key={card} className="w-16 h-24 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center cursor-pointer hover:bg-blue-500">
-                            <span className="text-xs font-bold">{card}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Battlefield Slots */}
-                    <div className="grid grid-cols-2 gap-8 mb-6">
-                      {/* Player 1 Battlefield */}
-                      <div>
-                        <h4 className="text-blue-400 font-bold mb-2">Your Battlefield</h4>
-                        <div className="flex space-x-2">
-                          {[1, 2, 3].map((slot) => (
-                            <div key={slot} className="w-16 h-24 bg-gray-700 rounded border-2 border-gray-500 flex items-center justify-center">
-                              <span className="text-xs text-gray-400">Slot {slot}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Player 2 Battlefield */}
-                      <div>
-                        <h4 className="text-red-400 font-bold mb-2">Opponent Battlefield</h4>
-                        <div className="flex space-x-2">
-                          {[1, 2, 3].map((slot) => (
-                            <div key={slot} className="w-16 h-24 bg-gray-700 rounded border-2 border-gray-500 flex items-center justify-center">
-                              <span className="text-xs text-gray-400">Slot {slot}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Player 2 Cards (Top) */}
-                    <div>
-                      <h3 className="text-lg font-bold text-red-400 mb-3">Opponent Hand</h3>
-                      <div className="flex space-x-2 justify-center">
-                        {[1, 2, 3, 4, 5].map((card) => (
-                          <div key={card} className="w-16 h-24 bg-red-600 rounded border-2 border-red-400 flex items-center justify-center">
-                            <span className="text-xs font-bold">?</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="mt-6 text-center">
-                      <Button
-                        onClick={() => {
-                          setCurrentRoomId(null);
-                          handleTabChange('ranking');
-                        }}
-                        variant="destructive"
-                      >
-                        <i className="fas fa-door-open mr-2"></i>
-                        Leave Battle
-                      </Button>
-                    </div>
-                  </Card>
-                </div>
-              </div>
-            )}
 
 
 
@@ -1142,7 +1082,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
               {chatMessages.map((msg) => (
                 <div key={msg.id} className="text-gray-400 mb-1">
                   <span className={msg.type === 'system' ? 'text-blue-400' : 'text-green-400'}>
-                    [{msg.user}]
+                    [{msg.displayName}]
                   </span> {msg.message}
                 </div>
               ))}
