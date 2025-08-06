@@ -159,27 +159,38 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     const card = cards.find(c => c.id === selectedCard);
     if (!card || card.type !== 'battle') return;
 
-    // Force a state update to ensure the card placement is visible
+    console.log('Placing card:', card.name, 'at position:', position);
+    console.log('Card details:', card);
+
+    // Update battlefield state
     setBattlefield(prev => {
       const newBattlefield = {
         ...prev,
-        [position]: card
+        [position]: {
+          ...card,
+          id: card.id,
+          name: card.name,
+          attack: card.attack || 0,
+          defense: card.defense || 0, 
+          health: card.health || 1,
+          imageUrl: card.imageUrl || ''
+        }
       };
-      console.log('Placing card:', card.name, 'at position:', position, 'New battlefield:', newBattlefield);
+      console.log('New battlefield state:', newBattlefield);
       return newBattlefield;
     });
 
     // Remove from hand
-    setPlayerHand(prev => prev.filter(id => id !== selectedCard));
+    setPlayerHand(prev => {
+      const newHand = prev.filter(id => id !== selectedCard);
+      console.log('Updated hand:', newHand);
+      return newHand;
+    });
+    
     setSelectedCard(null);
     setShowPlacementButtons(false);
 
-    // Simple success toast without circular reference
-    toast({
-      title: "Card Placed Successfully", 
-      description: `${card.name} is now on the ${position} field`,
-      duration: 2000
-    });
+    console.log(`Card ${card.name} placed successfully on ${position} field`);
   };
 
   // Handle tab changes with navigation
@@ -226,27 +237,17 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
         setRoomForm({ name: '', type: 'pvp', description: '' });
         setCurrentRoomId(roomId);
         
-        // Show success toast first
-        toast({
-          title: "Room Created Successfully",
-          description: `${roomData.name} is ready for battle!`,
-          duration: 2000
-        });
+        // Navigate to battle tab without toast to prevent refresh
+        handleTabChange('battle');
         
-        // Small delay to prevent navigation conflicts with toast
-        setTimeout(() => {
-          // Always navigate to Battle tab first
-          handleTabChange('battle');
-          
-          // Then set the appropriate sub-tab
-          if (roomForm.type === 'pve') {
-            // For PvE rooms, go directly to fight sub-tab
-            setBattleSubTab('fight');
-          } else {
-            // For PvP rooms, go to waiting room sub-tab to wait for opponent
-            setBattleSubTab('waiting-room');
-          }
-        }, 100);
+        // Then set the appropriate sub-tab
+        if (roomForm.type === 'pve') {
+          // For PvE rooms, go directly to fight sub-tab
+          setBattleSubTab('fight');
+        } else {
+          // For PvP rooms, go to waiting room sub-tab to wait for opponent
+          setBattleSubTab('waiting-room');
+        }
       }
     } catch (error) {
       console.error('Error creating room:', error);
@@ -274,27 +275,17 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       setCurrentRoomId(roomId);
       const room = rooms.find(r => r.id === roomId);
       
-      // Show success toast first
-      toast({
-        title: "Joined Room Successfully",
-        description: `Welcome to ${room?.name || 'the battle room'}!`,
-        duration: 2000
-      });
+      // Navigate to battle tab without toast to prevent refresh
+      handleTabChange('battle');
       
-      // Small delay to prevent navigation conflicts with toast
-      setTimeout(() => {
-        // Always navigate to Battle tab first
-        handleTabChange('battle');
-        
-        // Then set the appropriate sub-tab
-        if (room?.type === 'pve') {
-          // For PvE rooms, go directly to fight sub-tab
-          setBattleSubTab('fight');
-        } else {
-          // For PvP rooms, go to waiting room sub-tab
-          setBattleSubTab('waiting-room');
-        }
-      }, 100);
+      // Then set the appropriate sub-tab  
+      if (room?.type === 'pve') {
+        // For PvE rooms, go directly to fight sub-tab
+        setBattleSubTab('fight');
+      } else {
+        // For PvP rooms, go to waiting room sub-tab
+        setBattleSubTab('waiting-room');
+      }
     }
   };
 
@@ -633,38 +624,42 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
                                 {/* Player Field */}
                                 <div className="flex space-x-4 justify-center mb-6">
-                                  {(['left', 'center', 'right'] as const).map((position) => (
-                                    <div key={position} className="w-24 h-32 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center relative overflow-hidden">
-                                      {battlefield[position] ? (
-                                        <div className="w-full h-full relative">
-                                          {battlefield[position]!.imageUrl ? (
-                                            <img 
-                                              src={battlefield[position]!.imageUrl} 
-                                              alt={battlefield[position]!.name}
-                                              className="w-full h-full object-cover rounded"
-                                            />
-                                          ) : (
-                                            <div className="w-full h-full bg-blue-700 flex items-center justify-center">
-                                              <div className="text-center p-1">
-                                                <div className="text-xs font-bold text-white mb-1">{battlefield[position]!.name}</div>
-                                                <div className="text-xs text-blue-200">⚔{battlefield[position]!.attack}</div>
-                                                <div className="text-xs text-blue-200">❤{battlefield[position]!.health}</div>
+                                  {(['left', 'center', 'right'] as const).map((position) => {
+                                    const placedCard = battlefield[position];
+                                    return (
+                                      <div key={position} className="w-24 h-32 bg-blue-600 rounded border-2 border-blue-400 flex items-center justify-center relative overflow-hidden">
+                                        {placedCard ? (
+                                          <div className="w-full h-full relative">
+                                            {placedCard.imageUrl ? (
+                                              <img 
+                                                src={placedCard.imageUrl} 
+                                                alt={placedCard.name}
+                                                className="w-full h-full object-cover rounded"
+                                                onError={(e) => console.log('Image load error:', e)}
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full bg-blue-700 flex items-center justify-center">
+                                                <div className="text-center p-1">
+                                                  <div className="text-xs font-bold text-white mb-1">{placedCard.name}</div>
+                                                  <div className="text-xs text-blue-200">⚔{placedCard.attack || 0}</div>
+                                                  <div className="text-xs text-blue-200">❤{placedCard.health || 1}</div>
+                                                </div>
+                                              </div>
+                                            )}
+                                            {/* Stats overlay */}
+                                            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-1">
+                                              <div className="flex justify-between">
+                                                <span>⚔{placedCard.attack || 0}</span>
+                                                <span>❤{placedCard.health || 1}</span>
                                               </div>
                                             </div>
-                                          )}
-                                          {/* Stats overlay */}
-                                          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-1">
-                                            <div className="flex justify-between">
-                                              <span>⚔{battlefield[position]!.attack}</span>
-                                              <span>❤{battlefield[position]!.health}</span>
-                                            </div>
                                           </div>
-                                        </div>
-                                      ) : (
-                                        <span className="text-xs text-blue-300">Empty</span>
-                                      )}
-                                    </div>
-                                  ))}
+                                        ) : (
+                                          <span className="text-xs text-blue-300">Empty</span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
 
                                 {/* Player Avatar and Health */}
