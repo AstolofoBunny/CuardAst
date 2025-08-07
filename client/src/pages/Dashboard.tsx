@@ -119,9 +119,9 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }
   }, [location]);
 
-  // Auto-sync existing room with battle tab
+  // Auto-sync existing room with battle tab (only if not finished)
   useEffect(() => {
-    if (userExistingRoom && !currentRoomId) {
+    if (userExistingRoom && !currentRoomId && userExistingRoom.status !== 'finished') {
       setCurrentRoomId(userExistingRoom.id);
       
       // Initialize hand and deck for fight when room is set
@@ -173,7 +173,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
   // Listen to battle changes for real-time synchronization
   useEffect(() => {
-    if (!currentRoom?.battleId) {
+    if (!currentRoom?.battleId || currentRoom.status === 'finished') {
       setCurrentBattle(null);
       return;
     }
@@ -185,6 +185,12 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
         if (battleDoc.exists()) {
           const battleData = { id: battleDoc.id, ...battleDoc.data() } as any;
           setCurrentBattle(battleData);
+          
+          // If battle is finished, clear current room to prevent re-attachment
+          if (battleData.status === 'finished') {
+            setCurrentRoomId(null);
+            return;
+          }
           
           // Initialize player deck and hand if empty and user has a deck
           const playerData = battleData.players?.[user?.uid];
@@ -206,7 +212,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     );
 
     return () => unsubscribe();
-  }, [currentRoom?.battleId, user, distributeCards]);
+  }, [currentRoom?.battleId, currentRoom?.status, user, distributeCards]);
 
   // Auto-navigate to fight when all players ready (will be defined after handleBattleSubTabChange)
 
@@ -470,6 +476,13 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       
       await updateBattle(currentRoom.battleId, updatedBattle);
       
+      // Update room status to finished as well
+      const roomRef = doc(db, 'rooms', currentRoom.id);
+      await updateDoc(roomRef, {
+        status: 'finished',
+        lastActivity: Date.now()
+      });
+      
       // Reset local battle state
       setCurrentRoomId(null);
       setCurrentRound(1);
@@ -482,8 +495,8 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       
       // Show notification to user
       toast({
-        title: "Поражение",
-        description: "Вы сдались в бою",
+        title: "Defeat",
+        description: "You surrendered the battle",
         variant: "destructive"
       });
       
@@ -493,8 +506,8 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     } catch (error) {
       console.error('Error surrendering:', error);
       toast({
-        title: "Ошибка",
-        description: "Не удалось сдаться",
+        title: "Error",
+        description: "Failed to surrender",
         variant: "destructive"
       });
     }
@@ -541,9 +554,9 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     navigate(`/battle/${newSubTab}`);
   };
 
-  // Auto-navigate to fight when all players ready
+  // Auto-navigate to fight when all players ready (only for active rooms)
   useEffect(() => {
-    if (currentRoom && currentRoom.playersReady && currentRoom.players) {
+    if (currentRoom && currentRoom.playersReady && currentRoom.players && currentRoom.status !== 'finished') {
       const readyCount = currentRoom.playersReady.length;
       const totalPlayers = currentRoom.players.length;
       
@@ -1956,13 +1969,13 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       <AlertDialog open={showSurrenderDialog} onOpenChange={setShowSurrenderDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Подтвердить сдачу</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Surrender</AlertDialogTitle>
             <AlertDialogDescription>
-              Вы действительно хотите сдаться? Это будет засчитано как поражение, и ваш противник получит победу.
+              Are you sure you want to surrender? This will count as a defeat and your opponent will get the victory.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setShowSurrenderDialog(false);
@@ -1970,7 +1983,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
               }}
               className="bg-red-600 hover:bg-red-700"
             >
-              Да, сдаться
+              Surrender
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
