@@ -276,76 +276,39 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     console.log('Card drawn from deck! Energy cost: 5');
   };
 
-  // Handle card attack on battlefield
+  // Handle card attack on battlefield - now uses server state
   const handleAttackClick = (position: 'left' | 'center' | 'right') => {
-    if (!isPlayerTurn || currentRound < 2) return; // Can't attack in round 1
+    if (!currentBattle || !user || currentBattle.currentTurn !== user.uid) return;
+    if ((currentBattle.currentRound || 1) < 2) return; // Can't attack in round 1
     
-    const attackerCard = battlefield[position];
+    const attackerCard = currentBattle.players[user.uid]?.battlefield?.[position];
     if (!attackerCard) return;
     
     setSelectedAttacker(position);
     setShowAttackTargets(true);
   };
 
-  // Execute attack on target
-  const executeAttack = (target: 'enemy' | 'left' | 'center' | 'right') => {
-    if (!selectedAttacker) return;
+  // Execute attack on target - now uses server-side battle
+  const executeAttack = async (target: 'enemy' | 'left' | 'center' | 'right') => {
+    if (!selectedAttacker || !currentBattle || !user || !currentRoom?.battleId) return;
     
-    const attackerCard = battlefield[selectedAttacker];
+    const attackerCard = currentBattle.players[user.uid]?.battlefield?.[selectedAttacker];
     if (!attackerCard) return;
+
+    const damage = attackerCard.attack || 0;
+    console.log(`${attackerCard.name} attacking ${target} for ${damage} damage`);
 
     if (target === 'enemy') {
       // Attack enemy player directly
-      const damage = attackerCard.attack || 0;
-      setEnemyHP(prev => Math.max(0, prev - damage));
-      console.log(`${attackerCard.name} attacked enemy for ${damage} damage`);
+      const otherPlayerId = Object.keys(currentBattle.players).find(id => id !== user.uid);
+      if (otherPlayerId) {
+        await attackInBattle(currentRoom.battleId, user.uid, damage, 'player', otherPlayerId);
+      }
     } else {
       // Attack enemy card
-      const targetCard = enemyBattlefield[target];
-      if (!targetCard) return;
-
-      // Calculate damage with formula
-      let baseDamage = attackerCard.attack || 0;
-      
-      // Check for critical hit
-      const critChance = attackerCard.criticalChance || 0;
-      const isCrit = Math.random() * 100 < critChance;
-      if (isCrit) {
-        const critMultiplier = 1 + (attackerCard.criticalDamage || 0) / 100;
-        baseDamage = Math.floor(baseDamage * critMultiplier);
-        console.log('Critical hit!');
-      }
-
-      // Apply defense and resistances
-      const defense = targetCard.defense || 0;
-      let finalDamage = baseDamage - defense;
-
-      // Apply class-based resistance
-      const attackerClass = attackerCard.spellType || 'melee'; // Default to melee if no spell type
-      if (attackerClass === 'ranged' && targetCard.rangedResistance) {
-        finalDamage = finalDamage * (1 - targetCard.rangedResistance / 100);
-      } else if (attackerClass === 'melee' && targetCard.meleeResistance) {
-        finalDamage = finalDamage * (1 - targetCard.meleeResistance / 100);
-      } else if (attackerClass === 'magical' && targetCard.magicResistance) {
-        finalDamage = finalDamage * (1 - targetCard.magicResistance / 100);
-      }
-
-      finalDamage = Math.max(1, Math.floor(finalDamage)); // Minimum 1 damage
-
-      // Apply damage to target card
-      const newHealth = Math.max(0, (targetCard.health || 1) - finalDamage);
-      
-      if (newHealth <= 0) {
-        // Card destroyed
-        setEnemyBattlefield(prev => ({ ...prev, [target]: null }));
-        console.log(`${targetCard.name} destroyed!`);
-      } else {
-        // Update card health
-        setEnemyBattlefield(prev => ({
-          ...prev,
-          [target]: { ...targetCard, health: newHealth }
-        }));
-        console.log(`${targetCard.name} took ${finalDamage} damage, health: ${newHealth}`);
+      const otherPlayerId = Object.keys(currentBattle.players).find(id => id !== user.uid);
+      if (otherPlayerId) {
+        await attackInBattle(currentRoom.battleId, user.uid, damage, 'card', otherPlayerId, target);
       }
     }
 
@@ -463,6 +426,26 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }, 2000);
   };
 
+  // End player turn - use server-side battle state
+  const endPlayerTurn = async () => {
+    if (!currentBattle || !user || !currentRoom?.battleId) return;
+    
+    const playerData = currentBattle.players[user.uid];
+    if (!playerData || currentBattle.currentTurn !== user.uid) return;
+    
+    const playerIds = Object.keys(currentBattle.players);
+    const currentIndex = playerIds.indexOf(user.uid);
+    const nextIndex = (currentIndex + 1) % playerIds.length;
+    const nextPlayerId = playerIds[nextIndex];
+    
+    console.log('Ending player turn, next player:', nextPlayerId);
+    
+    const success = await endPlayerTurnInBattle(currentRoom.battleId, user.uid, nextPlayerId, currentBattle.currentRound);
+    if (success) {
+      console.log('Turn ended successfully');
+    }
+  };
+
   // Surrender function - copy logic from deleteRoom for proper cleanup
   const handleSurrender = async () => {
     if (!currentRoom || !user) return;
@@ -507,30 +490,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }
   };
 
-  // End player turn function - now uses server-side battle
-  const endPlayerTurn = async () => {
-    if (!currentBattle || !user || !currentRoom?.battleId) return;
-    
-    const playerData = currentBattle.players[user.uid];
-    if (!playerData || currentBattle.currentTurn !== user.uid) return;
-    
-    // Find next player
-    const playerIds = Object.keys(currentBattle.players);
-    const currentIndex = playerIds.indexOf(user.uid);
-    const nextIndex = (currentIndex + 1) % playerIds.length;
-    const nextPlayerId = playerIds[nextIndex];
-    
-    console.log('Player turn ended');
-    
-    await endPlayerTurnInBattle(currentRoom.battleId, user.uid, nextPlayerId, currentBattle.currentRound);
-    
-    // For PvE, handle bot turn after a delay
-    if (isPvE && nextPlayerId === 'ai_opponent') {
-      setTimeout(() => {
-        executeBotTurn();
-      }, 2000);
-    }
-  };
+
 
   // Handle tab changes with navigation
   const handleTabChange = (newTab: string) => {
@@ -1055,7 +1015,8 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                 {/* Enemy Field */}
                                 <div className="flex space-x-4 justify-center mb-6">
                                   {(['left', 'center', 'right'] as const).map((position) => {
-                                    const enemyCard = enemyBattlefield[position];
+                                    const otherPlayerId = Object.keys(currentBattle?.players || {}).find(id => id !== user?.uid);
+                                    const enemyCard = otherPlayerId && currentBattle?.players?.[otherPlayerId]?.battlefield?.[position];
                                     return (
                                       <div 
                                         key={position} 
@@ -1103,12 +1064,17 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
                                 <div className="text-center py-4 relative">
                                   <div className="text-xl font-bold text-yellow-400 mb-1">⚔ BATTLE ARENA ⚔</div>
-                                  <div className="text-sm text-yellow-300">{isPlayerTurn ? 'Your Turn' : 'Enemy Turn'} - {isPlayerTurn ? 'Place cards or cast spells' : 'Wait for enemy'}</div>
+                                  <div className="text-sm text-yellow-300">
+                                    {currentBattle?.currentTurn === user?.uid ? 'Your Turn' : 'Enemy Turn'} - 
+                                    {currentBattle?.currentTurn === user?.uid ? 'Place cards or cast spells' : 'Wait for enemy'}
+                                  </div>
                                   
                                   {/* Round indicator on battlefield */}
                                   <div className="absolute left-4 top-4 bg-orange-600 bg-opacity-80 border border-orange-400 rounded px-3 py-1">
-                                    <div className="text-sm font-bold text-white">Round {currentRound}</div>
-                                    <div className="text-xs text-orange-200">Battle Cards: {battleCardsPlayedThisRound}/1</div>
+                                    <div className="text-sm font-bold text-white">Round {currentBattle?.currentRound || 1}</div>
+                                    <div className="text-xs text-orange-200">
+                                      Battle Cards: {currentBattle?.players?.[user?.uid]?.battleCardsPlayedThisRound || 0}/1
+                                    </div>
                                   </div>
                                 </div>
 
@@ -1121,12 +1087,12 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                         key={position} 
                                         className={`w-24 h-32 rounded border-2 flex items-center justify-center relative overflow-hidden cursor-pointer transition-all ${
                                           placedCard 
-                                            ? (currentRound >= 2 && isPlayerTurn) 
+                                            ? ((currentBattle?.currentRound || 1) >= 2 && currentBattle?.currentTurn === user?.uid) 
                                               ? 'bg-blue-600 border-blue-400 hover:border-yellow-400 hover:bg-blue-500' 
                                               : 'bg-blue-600 border-blue-400'
                                             : 'bg-blue-600 border-blue-400'
                                         }`}
-                                        onClick={() => placedCard && currentRound >= 2 ? handleAttackClick(position) : undefined}
+                                        onClick={() => placedCard && (currentBattle?.currentRound || 1) >= 2 ? handleAttackClick(position) : undefined}
                                       >
                                         {placedCard ? (
                                           <div className="w-full h-full relative">
@@ -1157,7 +1123,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                             </div>
                                             
                                             {/* Attack indicator */}
-                                            {currentRound >= 2 && isPlayerTurn && (
+                                            {(currentBattle?.currentRound || 1) >= 2 && currentBattle?.currentTurn === user?.uid && (
                                               <div className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
                                             )}
                                           </div>
@@ -1194,9 +1160,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                 <div className="flex items-end justify-center space-x-8">
                                   {/* Deck Stack (Left side) */}
                                   <div className="flex flex-col items-center">
-                                    <h3 className="text-sm font-bold text-blue-400 mb-2">Deck ({playerDeck.length})</h3>
+                                    <h3 className="text-sm font-bold text-blue-400 mb-2">
+                                      Deck ({currentBattle?.players?.[user?.uid]?.deck?.length || 0})
+                                    </h3>
                                     <div className="relative">
-                                      {playerDeck.length > 0 ? (
+                                      {(currentBattle?.players?.[user?.uid]?.deck?.length || 0) > 0 ? (
                                         <div 
                                           className="relative cursor-pointer group"
                                           onClick={drawCardFromDeck}
@@ -1205,28 +1173,32 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                           <div className="absolute w-20 h-28 bg-gray-700 rounded border-2 border-gray-600 transform translate-x-1 translate-y-1"></div>
                                           <div className="absolute w-20 h-28 bg-gray-600 rounded border-2 border-gray-500 transform translate-x-0.5 translate-y-0.5"></div>
                                           <div className={`w-20 h-28 rounded border-2 flex items-center justify-center relative z-10 transition-all ${
-                                            playerHand.length >= 5 || playerEnergy < 5 || !isPlayerTurn
+                                            (currentBattle?.players?.[user?.uid]?.hand?.length || 0) >= 5 || 
+                                            (currentBattle?.players?.[user?.uid]?.energy || 0) < 5 || 
+                                            currentBattle?.currentTurn !== user?.uid
                                               ? 'bg-gray-800 border-gray-600 cursor-not-allowed' 
                                               : 'bg-blue-800 border-blue-600 hover:bg-blue-700 group-hover:transform group-hover:-translate-y-1'
                                           }`}>
                                             <div className="text-center">
                                               <div className="text-xs text-blue-200 font-bold">DECK</div>
-                                              <div className="text-xs text-blue-300">{playerDeck.length}</div>
-                                              {playerHand.length < 5 && playerEnergy >= 5 && isPlayerTurn && (
+                                              <div className="text-xs text-blue-300">{currentBattle?.players?.[user?.uid]?.deck?.length || 0}</div>
+                                              {(currentBattle?.players?.[user?.uid]?.hand?.length || 0) < 5 && 
+                                               (currentBattle?.players?.[user?.uid]?.energy || 0) >= 5 && 
+                                               currentBattle?.currentTurn === user?.uid && (
                                                 <div className="text-xs text-yellow-300 mt-1">5 Energy</div>
                                               )}
                                             </div>
                                           </div>
                                           
                                           {/* Draw tooltip */}
-                                          {playerDeck.length > 0 && (
+                                          {(currentBattle?.players?.[user?.uid]?.deck?.length || 0) > 0 && (
                                             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-20 bg-gray-800 border border-blue-400 rounded p-2 text-xs whitespace-nowrap">
                                               <div className="text-center">
-                                                {playerHand.length >= 5 ? (
+                                                {(currentBattle?.players?.[user?.uid]?.hand?.length || 0) >= 5 ? (
                                                   <div className="text-red-400">Hand Full (5/5)</div>
-                                                ) : playerEnergy < 5 ? (
+                                                ) : (currentBattle?.players?.[user?.uid]?.energy || 0) < 5 ? (
                                                   <div className="text-red-400">Need 5 Energy</div>
-                                                ) : !isPlayerTurn ? (
+                                                ) : currentBattle?.currentTurn !== user?.uid ? (
                                                   <div className="text-gray-400">Not Your Turn</div>
                                                 ) : (
                                                   <div className="text-green-400">Draw Card (5 Energy)</div>
@@ -1258,7 +1230,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                                 isSelected ? 'border-yellow-400 bg-yellow-600 transform -translate-y-2' : 
                                                 card?.imageUrl ? 'border-blue-400 bg-blue-600 hover:bg-blue-500' : 'border-gray-400 bg-gray-600 hover:bg-gray-500'
                                               }`}
-                                              onClick={() => isPlayerTurn ? handleCardClick(cardId) : undefined}
+                                              onClick={() => currentBattle?.currentTurn === user?.uid ? handleCardClick(cardId) : undefined}
                                             >
                                               {card?.imageUrl ? (
                                                 <img 
