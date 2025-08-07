@@ -382,49 +382,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     console.log('Bot deck initialized with', botDeckCards.length, 'cards');
   };
 
-  // Bot AI turn logic
-  const executeBotTurn = () => {
-    console.log('Bot turn started');
-    
-    // Bot decision making (simplified)
-    setTimeout(() => {
-      // 1. Bot might draw a card if hand not full and has energy
-      if (enemyHand.length < 5 && enemyDeck.length > 0 && enemyEnergy >= 5) {
-        const topCard = enemyDeck[0];
-        setEnemyHand(prev => [...prev, topCard]);
-        setEnemyDeck(prev => prev.slice(1));
-        setEnemyEnergy(prev => Math.max(0, prev - 5));
-        console.log('Bot drew a card');
-      }
-      
-      // 2. Bot might place a battle card if has energy and empty slot
-      const emptySlots = ['left', 'center', 'right'].filter(pos => !enemyBattlefield[pos as keyof typeof enemyBattlefield]);
-      if (emptySlots.length > 0 && enemyHand.length > 0 && enemyEnergy >= 20) {
-        const randomCard = enemyHand[Math.floor(Math.random() * enemyHand.length)];
-        const card = cards.find(c => c.id === randomCard);
-        if (card && card.type === 'battle') {
-          const randomSlot = emptySlots[Math.floor(Math.random() * emptySlots.length)] as 'left' | 'center' | 'right';
-          setEnemyBattlefield(prev => ({
-            ...prev,
-            [randomSlot]: card
-          }));
-          setEnemyHand(prev => prev.filter(id => id !== randomCard));
-          setEnemyEnergy(prev => Math.max(0, prev - 20));
-          console.log(`Bot placed ${card.name} on ${randomSlot}`);
-        }
-      }
-      
-      // End bot turn after 3 seconds
-      setTimeout(() => {
-        setPlayerEnergy(prev => Math.min(100, prev + 15));
-        setEnemyEnergy(prev => Math.min(100, prev + 15));
-        setBattleCardsPlayedThisRound(0);
-        setCurrentRound(prev => prev + 1);
-        setIsPlayerTurn(true);
-        console.log(`Round ${currentRound + 1} started`);
-      }, 1000);
-    }, 2000);
-  };
+  // Bot logic moved to useFirestore.ts - using checkAITurn function for server-side AI
 
   // End player turn - use server-side battle state
   const endPlayerTurn = async () => {

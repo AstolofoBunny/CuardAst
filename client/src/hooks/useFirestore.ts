@@ -685,7 +685,7 @@ export function useFirestore() {
     }
   };
 
-  // Check if it's AI's turn and make move
+  // Check if it's AI's turn and make move - prevent duplicate calls
   const checkAITurn = async (battle: Battle) => {
     if (!battle || battle.status === 'finished') return;
     
@@ -696,12 +696,13 @@ export function useFirestore() {
       currentTurn: battle.currentTurn,
       phase: battle.phase,
       aiReady: aiPlayer.isReady,
-      status: battle.status
+      status: battle.status,
+      currentRound: battle.currentRound
     });
     
-    // If it's AI turn or AI is not ready in preparation phase
-    if (battle.currentTurn === 'ai_opponent' || (battle.phase === 'preparation' && !aiPlayer.isReady)) {
-      console.log('AI should make a move!');
+    // Only act if it's specifically AI's turn - prevent continuous calls
+    if (battle.currentTurn === 'ai_opponent' && battle.phase === 'battle') {
+      console.log('AI should make a move! Round:', battle.currentRound);
       
       // Get battle document ID from the battles collection
       const battleSnapshot = await getDocs(query(collection(db, 'battles'), where('roomId', '==', battle.roomId)));
@@ -711,6 +712,20 @@ export function useFirestore() {
         await makeAIMove(battleDoc.id, 'ai_opponent', battle);
       } else {
         console.error('Battle document not found for roomId:', battle.roomId);
+      }
+    } else if (battle.phase === 'preparation' && !aiPlayer.isReady) {
+      // Only mark AI ready once during preparation
+      console.log('AI marking ready during preparation');
+      const battleSnapshot = await getDocs(query(collection(db, 'battles'), where('roomId', '==', battle.roomId)));
+      if (!battleSnapshot.empty) {
+        const battleDoc = battleSnapshot.docs[0];
+        const battleRef = doc(db, 'battles', battleDoc.id);
+        await updateDoc(battleRef, {
+          [`players.ai_opponent.isReady`]: true,
+          phase: 'battle',
+          currentTurn: Object.keys(battle.players)[0], // Start with first player (human)
+          lastActivity: Date.now()
+        });
       }
     } else {
       console.log('Not AI turn or AI already ready');
