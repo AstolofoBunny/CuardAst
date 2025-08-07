@@ -589,8 +589,16 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
               <>
                 <Link href="/settings">
                   <div className="flex items-center space-x-3 cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors">
-                    <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                      <i className="fas fa-user"></i>
+                    <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center overflow-hidden">
+                      {user.profilePicture ? (
+                        <img 
+                          src={user.profilePicture} 
+                          alt={user.displayName} 
+                          className="w-full h-full object-cover" 
+                        />
+                      ) : (
+                        <i className="fas fa-user"></i>
+                      )}
                     </div>
                     <div className="flex flex-col">
                       <div className="flex items-center space-x-2">
@@ -920,19 +928,28 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                 <div className="flex flex-col items-center space-y-3 mb-6">
                                   <div className="flex items-center space-x-4">
                                     <div 
-                                      className={`w-16 h-16 bg-red-600 rounded-full border-2 border-red-400 flex items-center justify-center cursor-pointer transition-all ${
+                                      className={`w-16 h-16 bg-red-600 rounded-full border-2 border-red-400 flex items-center justify-center cursor-pointer transition-all overflow-hidden ${
                                         showAttackTargets ? 'animate-pulse border-yellow-400' : ''
                                       }`}
                                       onClick={() => showAttackTargets ? executeAttack('enemy') : undefined}
                                     >
-                                      <span className="text-sm font-bold text-white">
-                                        {isPvE ? 'AI' : (() => {
-                                          const otherPlayerId = currentRoom?.players.find(id => id !== user?.uid);
-                                          return otherPlayerId && playerUsers[otherPlayerId] 
-                                            ? playerUsers[otherPlayerId].displayName.charAt(0) 
-                                            : '?';
-                                        })()}
-                                      </span>
+                                      {isPvE ? (
+                                        <span className="text-sm font-bold text-white">AI</span>
+                                      ) : (() => {
+                                        const otherPlayerId = currentRoom?.players.find(id => id !== user?.uid);
+                                        const otherUser = otherPlayerId && playerUsers[otherPlayerId];
+                                        return otherUser?.profilePicture ? (
+                                          <img 
+                                            src={otherUser.profilePicture} 
+                                            alt={otherUser.displayName} 
+                                            className="w-full h-full object-cover" 
+                                          />
+                                        ) : (
+                                          <span className="text-sm font-bold text-white">
+                                            {otherUser?.displayName?.charAt(0) || '?'}
+                                          </span>
+                                        );
+                                      })()}
                                     </div>
                                     <div className="flex flex-col space-y-1">
                                       <div className="text-xs text-red-400 font-bold">
@@ -1096,8 +1113,16 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                 {/* Player Avatar and Health */}
                                 <div className="flex flex-col items-center space-y-3">
                                   <div className="flex items-center space-x-4">
-                                    <div className="w-16 h-16 bg-blue-600 rounded-full border-2 border-blue-400 flex items-center justify-center">
-                                      <span className="text-sm font-bold text-white">{user?.displayName?.charAt(0) || 'P'}</span>
+                                    <div className="w-16 h-16 bg-blue-600 rounded-full border-2 border-blue-400 flex items-center justify-center overflow-hidden">
+                                      {user?.profilePicture ? (
+                                        <img 
+                                          src={user.profilePicture} 
+                                          alt={user.displayName} 
+                                          className="w-full h-full object-cover" 
+                                        />
+                                      ) : (
+                                        <span className="text-sm font-bold text-white">{user?.displayName?.charAt(0) || 'P'}</span>
+                                      )}
                                     </div>
                                     <div className="flex flex-col space-y-1">
                                       <div className="text-xs text-blue-400 font-bold">Your HP: {currentBattle && user ? currentBattle.players[user.uid]?.hp || 50 : 50}/50</div>

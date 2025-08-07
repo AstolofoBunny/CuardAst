@@ -165,6 +165,15 @@ export function useFirestore() {
       
       // For PvE rooms, immediately create a battle
       if (roomData.type === 'pve') {
+        // Create AI deck immediately with Battle cards only
+        const battleCards = cards.filter(card => card.type === 'battle');
+        const aiDeck = [];
+        for (let i = 0; i < 10; i++) {
+          const randomCard = battleCards[Math.floor(Math.random() * battleCards.length)];
+          aiDeck.push(randomCard.id);
+        }
+        const { hand: aiHand, remainingDeck: aiRemainingDeck } = distributeCards(aiDeck);
+        
         const battleData = {
           roomId: docRef.id,
           players: {
@@ -188,8 +197,8 @@ export function useFirestore() {
               displayName: 'AI Opponent',
               hp: 50,
               energy: 100,
-              deck: [], // AI deck will be auto-generated
-              hand: [],
+              deck: aiRemainingDeck, // AI gets deck immediately with Battle cards only
+              hand: aiHand,         // AI gets starting hand
               battlefield: {
                 left: null,
                 center: null,
@@ -206,6 +215,8 @@ export function useFirestore() {
           createdAt: Date.now(),
           lastActivity: Date.now()
         };
+        
+        console.log('PvE battle created with AI deck:', aiDeck.length, 'cards, AI hand:', aiHand.length);
         
         const battleRef = await addDoc(collection(db, 'battles'), battleData);
         
@@ -616,11 +627,14 @@ export function useFirestore() {
       // Wait 2-3 seconds to simulate thinking
       await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
 
-      // Initialize AI deck if empty
+      // Check if AI deck needs initialization (should rarely happen now)
       if (aiPlayer.deck.length === 0 && aiPlayer.hand.length === 0) {
-        const battleCards = cards.filter(card => card.type === 'battle' && card.isBase);
+        console.log('AI needs deck initialization during battle - this should be rare - available cards:', cards.length);
+        const battleCards = cards.filter(card => card.type === 'battle');
+        console.log('Available battle cards for AI:', battleCards.length);
+        
         if (battleCards.length > 0) {
-          // Create AI deck with random base cards
+          // Create AI deck with random battle cards (no ability cards)
           const aiDeck = [];
           for (let i = 0; i < 10; i++) {
             const randomCard = battleCards[Math.floor(Math.random() * battleCards.length)];
@@ -633,11 +647,14 @@ export function useFirestore() {
           await updateDoc(battleRef, {
             [`players.${aiPlayerId}.deck`]: remainingDeck,
             [`players.${aiPlayerId}.hand`]: hand,
+            [`players.${aiPlayerId}.energy`]: 100, // Make sure AI starts with full energy
             lastActivity: Date.now()
           });
           
-          console.log('AI deck initialized with', aiDeck.length, 'cards');
+          console.log('AI deck initialized during battle with', aiDeck.length, 'battle cards, hand:', hand.length, 'remaining deck:', remainingDeck.length);
           return; // End turn after initializing deck
+        } else {
+          console.error('No battle cards available for AI deck!');
         }
       }
 
