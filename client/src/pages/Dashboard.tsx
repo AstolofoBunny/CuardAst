@@ -27,6 +27,7 @@ import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { loadCards, getCardById } from '@/lib/cards';
 
 interface DashboardProps {
   user: any;
@@ -41,8 +42,10 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [activeTab, setActiveTab] = useState(initialTab);
   const [battleSubTab, setBattleSubTab] = useState(initialBattleSubTab || 'waiting-room');
   const [location, navigate] = useLocation();
-  const { rooms, rankings, cards, chatMessages, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms, sendChatMessage, distributeCards, getUserById, markPlayerReadyInRoom, placeBattleCardInBattle, useMagicCardInBattle, drawCardInBattle, endPlayerTurnInBattle, attackInBattle, updateBattle, checkAITurn } = useFirestore();
+  const { rooms, rankings, chatMessages, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms, sendChatMessage, distributeCards, getUserById, markPlayerReadyInRoom, placeBattleCardInBattle, useMagicCardInBattle, drawCardInBattle, endPlayerTurnInBattle, attackInBattle, updateBattle, checkAITurn } = useFirestore();
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
+  const [cards, setCards] = useState<GameCard[]>([]);
+  const [cardsLoading, setCardsLoading] = useState(true);
   const [chatCollapsed, setChatCollapsed] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
   const [playerHand, setPlayerHand] = useState<string[]>([]);

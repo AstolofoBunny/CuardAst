@@ -127,9 +127,9 @@ export interface Battle {
       deck: string[];
       hand: string[];
       battlefield: {
-        left: GameCard | null;
-        center: GameCard | null;
-        right: GameCard | null;
+        left: string | null; // Card ID
+        center: string | null; // Card ID  
+        right: string | null; // Card ID
       };
       battlefieldAttacks: {
         left: boolean;
@@ -187,7 +187,7 @@ export interface PlayerState {
   energy: number;
   deck: string[];
   hand: string[];
-  battlefield: GameCard[];
+  battlefield: string[]; // Array of card IDs
   isReady: boolean;
 }
 

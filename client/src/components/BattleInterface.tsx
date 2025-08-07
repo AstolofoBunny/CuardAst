@@ -8,6 +8,7 @@ import { useFirestore } from '@/hooks/useFirestore';
 import { useToast } from '@/hooks/use-toast';
 import { doc, onSnapshot, DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { loadCards, getCardById, getCardsByIds, areCardsLoaded } from '@/lib/cards';
 
 interface BattleInterfaceProps {
   battleId: string;
@@ -16,15 +17,33 @@ interface BattleInterfaceProps {
 
 export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProps) {
   const { user, updateUserHP, updateUserEnergy, updateUserStats } = useAuth();
-  const { cards, updateBattle, markPlayerReady, checkAITurn } = useFirestore();
+  const { updateBattle, markPlayerReady, checkAITurn } = useFirestore();
   const { toast } = useToast();
   const [battle, setBattle] = useState<Battle | null>(null);
+  const [cards, setCards] = useState<GameCardType[]>([]);
+  const [cardsLoading, setCardsLoading] = useState(true);
   const [selectedBattleCard, setSelectedBattleCard] = useState<string>('');
   const [selectedPosition, setSelectedPosition] = useState<'left' | 'center' | 'right' | null>(null);
   const [selectedAbilities, setSelectedAbilities] = useState<string[]>([]);
   const [isReady, setIsReady] = useState(false);
+  const [pendingActions, setPendingActions] = useState<any[]>([]);
 
-  // Listen to battle updates
+  // Load cards once on component mount
+  useEffect(() => {
+    const initCards = async () => {
+      if (!areCardsLoaded()) {
+        const loadedCards = await loadCards();
+        setCards(loadedCards);
+      } else {
+        setCards(await loadCards());
+      }
+      setCardsLoading(false);
+    };
+    
+    initCards();
+  }, []);
+
+  // Listen to battle updates - single optimized subscription
   useEffect(() => {
     if (!battleId) return;
 
@@ -35,6 +54,38 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
           const battleData = doc.data() as Battle;
           setBattle(battleData);
           
+          // Check if battle is finished
+          if (battleData.status !== 'finished') {
+            const players = Object.values(battleData.players);
+            const defeatedPlayers = players.filter(p => p.hp <= 0);
+            
+            if (defeatedPlayers.length > 0) {
+              // End the battle
+              const winner = players.find(p => p.hp > 0)?.uid || 'tie';
+              const finishedBattle = {
+                ...battleData,
+                status: 'finished' as const,
+                phase: 'finished' as const,
+                winner
+              };
+              
+              updateBattle(battleId, finishedBattle);
+              
+              // Update user stats if this player won/lost
+              if (user && winner !== 'tie' && updateUserStats) {
+                if (winner === user.uid) {
+                  updateUserStats(user.wins + 1, user.losses);
+                  toast({ title: "Victory!", description: "You won the battle!" });
+                } else {
+                  updateUserStats(user.wins, user.losses + 1);
+                  toast({ title: "Defeat", description: "You lost the battle.", variant: "destructive" });
+                }
+              }
+              
+              return;
+            }
+          }
+          
           // Check if AI needs to make a move
           if (battleData && checkAITurn) {
             checkAITurn(battleData);
@@ -44,14 +95,14 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
     );
 
     return () => unsubscribe();
-  }, [battleId, checkAITurn]);
+  }, [battleId, checkAITurn, updateBattle, user, updateUserStats, toast]);
 
-  if (!battle || !user) {
+  if (!battle || !user || cardsLoading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-96">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-yellow-400 mb-4"></div>
-          <p className="text-lg">Loading battle...</p>
+          <p className="text-lg">{cardsLoading ? 'Loading cards...' : 'Loading battle...'}</p>
         </div>
       </div>
     );
@@ -112,7 +163,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
   const handlePlaceCard = async (position: 'left' | 'center' | 'right') => {
     if (!selectedBattleCard || !user || !battle) return;
     
-    const card = cards.find(c => c.id === selectedBattleCard);
+    const card = getCardById(selectedBattleCard);
     if (!card) return;
     
     // Check if position is already occupied
@@ -135,25 +186,23 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
       return;
     }
     
-    const updatedBattle = {
-      ...battle,
-      players: {
-        ...battle.players,
-        [user.uid]: {
-          ...playerData,
-          battlefield: {
-            ...playerData.battlefield,
-            [position]: card
-          },
-          energy: playerData.energy - 20,
-          hand: playerData.hand.filter(cardId => cardId !== selectedBattleCard)
-        }
-      }
+    // Add to pending actions instead of immediate update
+    const newAction = {
+      type: 'place_card',
+      cardId: selectedBattleCard,
+      position,
+      timestamp: Date.now()
     };
     
-    await updateBattle(battleId, updatedBattle);
+    setPendingActions(prev => [...prev, newAction]);
     setSelectedBattleCard('');
     setSelectedPosition(null);
+    
+    toast({
+      title: "Card Placed",
+      description: "Click 'End Turn' to confirm your moves.",
+      variant: "default"
+    });
   };
 
   const handleMarkReady = async () => {
@@ -174,6 +223,45 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
     } else {
       setSelectedAbilities([...selectedAbilities, cardId]);
     }
+  };
+
+  // Apply all pending actions and end turn
+  const handleEndTurn = async () => {
+    if (!battle || !user || !battleId || pendingActions.length === 0) return;
+
+    let updatedPlayerData = { ...playerData };
+    
+    // Process all pending actions
+    for (const action of pendingActions) {
+      if (action.type === 'place_card') {
+        updatedPlayerData = {
+          ...updatedPlayerData,
+          battlefield: {
+            ...updatedPlayerData.battlefield,
+            [action.position]: action.cardId // Store card ID, not object
+          },
+          energy: updatedPlayerData.energy - 20,
+          hand: updatedPlayerData.hand.filter(cardId => cardId !== action.cardId)
+        };
+      }
+    }
+    
+    const updatedBattle = {
+      ...battle,
+      players: {
+        ...battle.players,
+        [user.uid]: updatedPlayerData
+      },
+      lastActivity: Date.now()
+    };
+
+    await updateBattle(battleId, updatedBattle);
+    setPendingActions([]);
+    
+    toast({
+      title: "Turn Completed",
+      description: "Your moves have been applied!"
+    });
   };
 
   const handleReady = async () => {
@@ -351,7 +439,8 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
             </h3>
             <div className="flex justify-center space-x-4">
               {['left', 'center', 'right'].map((position) => {
-                const card = opponentData?.battlefield?.[position as 'left' | 'center' | 'right'];
+                const cardId = opponentData?.battlefield?.[position as 'left' | 'center' | 'right'];
+                const card = cardId ? getCardById(cardId) : null;
                 return (
                   <div key={position} className="w-24 h-32 border-2 border-red-500 rounded-lg bg-gray-700 flex items-center justify-center">
                     {card ? (
@@ -382,17 +471,21 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
             <h3 className="text-sm font-bold text-blue-400 mb-2">Your Cards</h3>
             <div className="flex justify-center space-x-4">
               {['left', 'center', 'right'].map((position) => {
-                const card = playerData.battlefield[position as 'left' | 'center' | 'right'];
+                const cardId = playerData.battlefield[position as 'left' | 'center' | 'right'];
+                const card = cardId ? getCardById(cardId) : null;
                 const isSelected = selectedPosition === position;
+                const hasPendingAction = pendingActions.some(a => a.position === position && a.type === 'place_card');
+                
                 return (
                   <div 
                     key={position} 
                     className={`w-24 h-32 border-2 rounded-lg bg-gray-700 flex items-center justify-center cursor-pointer transition-all duration-200 ${
                       isSelected ? 'border-yellow-400 bg-yellow-900' : 
+                      hasPendingAction ? 'border-green-400 bg-green-900' :
                       card ? 'border-blue-500' : 'border-gray-500 hover:border-blue-400'
                     }`}
                     onClick={() => {
-                      if (!card && selectedBattleCard) {
+                      if (!card && selectedBattleCard && !hasPendingAction) {
                         handlePlaceCard(position as 'left' | 'center' | 'right');
                       }
                     }}
@@ -405,6 +498,10 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                           <div>🛡️{card.defense}</div>
                           <div>❤️{card.health}</div>
                         </div>
+                      </div>
+                    ) : hasPendingAction ? (
+                      <div className="text-center">
+                        <div className="text-xs text-green-400">Pending...</div>
                       </div>
                     ) : (
                       <div className="text-center">
@@ -458,7 +555,17 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
             </div>
           </div>
 
-          <div className="flex justify-center">
+          {/* Action buttons */}
+          <div className="flex justify-center space-x-4">
+            {pendingActions.length > 0 && (
+              <Button
+                onClick={handleEndTurn}
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8"
+              >
+                End Turn ({pendingActions.length} actions)
+              </Button>
+            )}
+            
             <Button
               onClick={handleReady}
               disabled={!selectedBattleCard || isReady || battle.status === 'finished'}
