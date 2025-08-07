@@ -8,7 +8,6 @@ import { useFirestore } from '@/hooks/useFirestore';
 import { useToast } from '@/hooks/use-toast';
 import { doc, onSnapshot, DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { loadCards, getCardById, getCardsByIds, areCardsLoaded } from '@/lib/cards';
 
 interface BattleInterfaceProps {
   battleId: string;
@@ -17,31 +16,15 @@ interface BattleInterfaceProps {
 
 export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProps) {
   const { user, updateUserHP, updateUserEnergy, updateUserStats } = useAuth();
-  const { updateBattle, markPlayerReady, checkAITurn } = useFirestore();
+  const { cards, updateBattle, markPlayerReady, checkAITurn } = useFirestore();
   const { toast } = useToast();
   const [battle, setBattle] = useState<Battle | null>(null);
-  const [cards, setCards] = useState<GameCardType[]>([]);
-  const [cardsLoading, setCardsLoading] = useState(true);
   const [selectedBattleCard, setSelectedBattleCard] = useState<string>('');
   const [selectedPosition, setSelectedPosition] = useState<'left' | 'center' | 'right' | null>(null);
   const [selectedAbilities, setSelectedAbilities] = useState<string[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [pendingActions, setPendingActions] = useState<any[]>([]);
 
-  // Load cards once on component mount
-  useEffect(() => {
-    const initCards = async () => {
-      if (!areCardsLoaded()) {
-        const loadedCards = await loadCards();
-        setCards(loadedCards);
-      } else {
-        setCards(await loadCards());
-      }
-      setCardsLoading(false);
-    };
-    
-    initCards();
-  }, []);
 
   // Listen to battle updates - single optimized subscription
   useEffect(() => {
@@ -97,12 +80,12 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
     return () => unsubscribe();
   }, [battleId, checkAITurn, updateBattle, user, updateUserStats, toast]);
 
-  if (!battle || !user || cardsLoading) {
+  if (!battle || !user) {
     return (
       <div className="p-6 flex items-center justify-center min-h-96">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-yellow-400 mb-4"></div>
-          <p className="text-lg">{cardsLoading ? 'Loading cards...' : 'Loading battle...'}</p>
+          <p className="text-lg">Loading battle...</p>
         </div>
       </div>
     );
@@ -163,7 +146,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
   const handlePlaceCard = async (position: 'left' | 'center' | 'right') => {
     if (!selectedBattleCard || !user || !battle) return;
     
-    const card = getCardById(selectedBattleCard);
+    const card = cards.find(c => c.id === selectedBattleCard);
     if (!card) return;
     
     // Check if position is already occupied
@@ -440,7 +423,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
             <div className="flex justify-center space-x-4">
               {['left', 'center', 'right'].map((position) => {
                 const cardId = opponentData?.battlefield?.[position as 'left' | 'center' | 'right'];
-                const card = cardId ? getCardById(cardId) : null;
+                const card = cardId ? cards.find(c => c.id === cardId) : null;
                 return (
                   <div key={position} className="w-24 h-32 border-2 border-red-500 rounded-lg bg-gray-700 flex items-center justify-center">
                     {card ? (
@@ -472,7 +455,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
             <div className="flex justify-center space-x-4">
               {['left', 'center', 'right'].map((position) => {
                 const cardId = playerData.battlefield[position as 'left' | 'center' | 'right'];
-                const card = cardId ? getCardById(cardId) : null;
+                const card = cardId ? cards.find(c => c.id === cardId) : null;
                 const isSelected = selectedPosition === position;
                 const hasPendingAction = pendingActions.some(a => a.position === position && a.type === 'place_card');
                 

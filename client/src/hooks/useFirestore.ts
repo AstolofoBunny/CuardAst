@@ -22,16 +22,14 @@ import {
 import { db, BASE_CARDS } from '@/lib/firebase';
 import { GameCard, Room, Battle, RankingEntry, ChatMessage } from '@/types/game';
 import { useToast } from '@/hooks/use-toast';
-import { getCardById } from '@/lib/cards';
 
 export function useFirestore() {
+  const [cards, setCards] = useState<GameCard[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [rankings, setRankings] = useState<RankingEntry[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  
-  // Cards are loaded from local file when needed - no state needed
 
   // Initialize base cards if they don't exist
   useEffect(() => {
@@ -54,10 +52,31 @@ export function useFirestore() {
     initializeBaseCards();
   }, []);
 
-  // Cards are now loaded locally, no Firebase subscription needed
+  // Listen to cards collection
   useEffect(() => {
-    setLoading(false);
-  }, []);
+    const unsubscribe = onSnapshot(
+      collection(db, 'cards'),
+      (snapshot: QuerySnapshot<DocumentData>) => {
+        const cardsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as GameCard[];
+        setCards(cardsData);
+        setLoading(false);
+      },
+      (error: any) => {
+        console.error('Error fetching cards:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load cards",
+          variant: "destructive"
+        });
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [toast]);
 
   // Listen to rooms collection
   useEffect(() => {
@@ -147,9 +166,7 @@ export function useFirestore() {
       // For PvE rooms, immediately create a battle
       if (roomData.type === 'pve') {
         // Create AI deck immediately with Battle cards only
-        const { loadCards } = await import('@/lib/cards');
-        const allCards = await loadCards();
-        const battleCards = allCards.filter(card => card.type === 'battle');
+        const battleCards = cards.filter(card => card.type === 'battle');
         const aiDeck = [];
         for (let i = 0; i < 10; i++) {
           const randomCard = battleCards[Math.floor(Math.random() * battleCards.length)];
@@ -632,10 +649,8 @@ export function useFirestore() {
 
       // Check if AI deck needs initialization (should rarely happen now)
       if (aiPlayer.deck.length === 0 && aiPlayer.hand.length === 0) {
-        console.log('AI needs deck initialization during battle - this should be rare');
-        const { loadCards } = await import('@/lib/cards');
-        const allCards = await loadCards();
-        const battleCards = allCards.filter(card => card.type === 'battle');
+        console.log('AI needs deck initialization during battle - this should be rare - available cards:', cards.length);
+        const battleCards = cards.filter(card => card.type === 'battle');
         console.log('Available battle cards for AI:', battleCards.length);
         console.log('Available battle cards for AI:', battleCards.length);
         
@@ -711,8 +726,7 @@ export function useFirestore() {
         if (emptyPositions.length > 0) {
           // Pick random card from hand
           const randomCardId = aiPlayer.hand[Math.floor(Math.random() * aiPlayer.hand.length)];
-          const { getCardById } = await import('@/lib/cards');
-          const randomCard = getCardById(randomCardId);
+          const randomCard = cards.find(c => c.id === randomCardId);
           
           if (randomCard && randomCard.type === 'battle') {
             const randomPosition = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
@@ -982,7 +996,7 @@ export function useFirestore() {
         }
         
         // Direct player attack - only base damage
-        const attackingCardData = getCardById(attackingCard);
+        const attackingCardData = cards.find(c => c.id === attackingCard);
         if (!attackingCardData) {
           console.log('Attacking card data not found');
           return false;
@@ -1007,8 +1021,8 @@ export function useFirestore() {
           return false;
         }
         
-        const attackingCardData = getCardById(attackingCard);
-        const defendingCardData = getCardById(defendingCardId);
+        const attackingCardData = cards.find(c => c.id === attackingCard);
+        const defendingCardData = cards.find(c => c.id === defendingCardId);
         
         if (!attackingCardData || !defendingCardData) {
           console.log('Card data not found');
@@ -1096,6 +1110,7 @@ export function useFirestore() {
   };
 
   return {
+    cards,
     rooms,
     rankings,
     chatMessages,
