@@ -119,9 +119,9 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }
   }, [location]);
 
-  // Auto-sync existing room with battle tab (only if not finished)
+  // Auto-sync existing room with battle tab
   useEffect(() => {
-    if (userExistingRoom && !currentRoomId && userExistingRoom.status !== 'finished') {
+    if (userExistingRoom && !currentRoomId) {
       setCurrentRoomId(userExistingRoom.id);
       
       // Initialize hand and deck for fight when room is set
@@ -173,7 +173,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
   // Listen to battle changes for real-time synchronization
   useEffect(() => {
-    if (!currentRoom?.battleId || currentRoom.status === 'finished') {
+    if (!currentRoom?.battleId) {
       setCurrentBattle(null);
       return;
     }
@@ -185,12 +185,6 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
         if (battleDoc.exists()) {
           const battleData = { id: battleDoc.id, ...battleDoc.data() } as any;
           setCurrentBattle(battleData);
-          
-          // If battle is finished, clear current room to prevent re-attachment
-          if (battleData.status === 'finished') {
-            setCurrentRoomId(null);
-            return;
-          }
           
           // Initialize player deck and hand if empty and user has a deck
           const playerData = battleData.players?.[user?.uid];
@@ -212,7 +206,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     );
 
     return () => unsubscribe();
-  }, [currentRoom?.battleId, currentRoom?.status, user, distributeCards]);
+  }, [currentRoom?.battleId, user, distributeCards]);
 
   // Auto-navigate to fight when all players ready (will be defined after handleBattleSubTabChange)
 
@@ -485,6 +479,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       
       // Reset local battle state
       setCurrentRoomId(null);
+      setCurrentBattle(null);
       setCurrentRound(1);
       setIsPlayerTurn(true);
       setBattleCardsPlayedThisRound(0);
@@ -554,9 +549,9 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     navigate(`/battle/${newSubTab}`);
   };
 
-  // Auto-navigate to fight when all players ready (only for active rooms)
+  // Auto-navigate to fight when all players ready
   useEffect(() => {
-    if (currentRoom && currentRoom.playersReady && currentRoom.players && currentRoom.status !== 'finished') {
+    if (currentRoom && currentRoom.playersReady && currentRoom.players) {
       const readyCount = currentRoom.playersReady.length;
       const totalPlayers = currentRoom.players.length;
       

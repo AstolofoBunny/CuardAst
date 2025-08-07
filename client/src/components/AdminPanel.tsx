@@ -13,9 +13,10 @@ import { useAuth } from '@/hooks/useAuth';
 
 export function AdminPanel() {
   const { user } = useAuth();
-  const { cards, createCard, updateCard, deleteCard, rankings } = useFirestore();
+  const { cards, createCard, updateCard, deleteCard, rankings, rooms, deleteRoom } = useFirestore();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<GameCardType | null>(null);
+  const [cleanupEmail, setCleanupEmail] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     type: 'battle' as 'battle' | 'ability',
@@ -132,6 +133,35 @@ export function AdminPanel() {
     }
   };
 
+  const handleCleanupUserBattles = async () => {
+    if (!cleanupEmail.trim()) return;
+    
+    // Find rooms where the user is participating
+    const userRooms = rooms.filter(room => 
+      room.hostName.includes(cleanupEmail) || 
+      // We can't easily match by email in rooms, so we'll look for these specific test emails
+      (cleanupEmail === 'andrey.yakovlev.200314@gmail.com' && (room.hostName.includes('Andrey') || room.hostName.includes('andrey'))) ||
+      (cleanupEmail === 'petro228man@gmail.com' && (room.hostName.includes('Petro') || room.hostName.includes('petro')))
+    );
+    
+    for (const room of userRooms) {
+      await deleteRoom(room.id);
+    }
+    
+    setCleanupEmail('');
+    alert(`Cleaned up ${userRooms.length} rooms for ${cleanupEmail}`);
+  };
+
+  const handleCleanupAllFinishedBattles = async () => {
+    const finishedRooms = rooms.filter(room => room.status === 'finished');
+    
+    for (const room of finishedRooms) {
+      await deleteRoom(room.id);
+    }
+    
+    alert(`Cleaned up ${finishedRooms.length} finished rooms`);
+  };
+
   const customCards = cards.filter(card => !card.isBase);
   const baseCards = cards.filter(card => card.isBase);
   const totalPlayers = rankings.length;
@@ -147,7 +177,7 @@ export function AdminPanel() {
         <p className="text-gray-400">Manage cards and monitor game statistics</p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Card Management */}
         <Card className="bg-gray-800 border-blue-600 p-6">
           <h3 className="text-xl font-bold mb-4">Card Management</h3>
@@ -473,6 +503,67 @@ export function AdminPanel() {
                   <span className="text-green-400">{player.wins} wins</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </Card>
+
+        {/* Battle Management */}
+        <Card className="bg-gray-800 border-red-600 p-6">
+          <h3 className="text-xl font-bold mb-4 text-red-400">Battle Management</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <Label className="text-gray-300 text-sm mb-2 block">Cleanup User Battles</Label>
+              <div className="flex space-x-2">
+                <Input
+                  placeholder="Enter email address"
+                  value={cleanupEmail}
+                  onChange={(e) => setCleanupEmail(e.target.value)}
+                  className="bg-gray-900 border-gray-600"
+                />
+                <Button
+                  onClick={handleCleanupUserBattles}
+                  disabled={!cleanupEmail.trim()}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Cleanup
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Remove all rooms/battles for a specific user</p>
+            </div>
+            
+            <Button
+              onClick={handleCleanupAllFinishedBattles}
+              className="w-full bg-orange-600 hover:bg-orange-700"
+            >
+              <i className="fas fa-broom mr-2"></i>
+              Cleanup All Finished Battles
+            </Button>
+            
+            <div className="bg-gray-900 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2">Current Rooms</h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {rooms.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No active rooms</p>
+                ) : (
+                  rooms.map((room) => (
+                    <div key={room.id} className="flex items-center justify-between p-2 bg-gray-800 rounded text-sm">
+                      <div>
+                        <span className="font-semibold">{room.name}</span>
+                        <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                          room.status === 'active' ? 'bg-green-600' : 
+                          room.status === 'finished' ? 'bg-red-600' : 'bg-yellow-600'
+                        }`}>
+                          {room.status}
+                        </span>
+                      </div>
+                      <div className="text-gray-400">
+                        {room.hostName} ({room.type})
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </Card>
