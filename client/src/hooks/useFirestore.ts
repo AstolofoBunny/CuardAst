@@ -663,15 +663,37 @@ export function useFirestore() {
   const endPlayerTurnInBattle = async (battleId: string, currentPlayerId: string, nextPlayerId: string, currentRound: number) => {
     try {
       const battleRef = doc(db, 'battles', battleId);
-      await updateDoc(battleRef, {
-        currentTurn: nextPlayerId,
-        [`players.${currentPlayerId}.energy`]: increment(15),
-        [`players.${nextPlayerId}.energy`]: increment(15),
-        [`players.${currentPlayerId}.battleCardsPlayedThisRound`]: 0,
-        [`players.${nextPlayerId}.battleCardsPlayedThisRound`]: 0,
-        currentRound: currentRound + 1,
-        lastActivity: Date.now()
-      });
+      const battleDoc = await getDoc(battleRef);
+      
+      if (!battleDoc.exists()) return false;
+      
+      const battleData = battleDoc.data();
+      const playerIds = Object.keys(battleData.players);
+      const currentIndex = playerIds.indexOf(currentPlayerId);
+      const isLastPlayerInRound = currentIndex === playerIds.length - 1;
+      
+      if (isLastPlayerInRound) {
+        // Last player of the round - advance round and replenish energy
+        await updateDoc(battleRef, {
+          currentTurn: playerIds[0], // Back to first player
+          [`players.${currentPlayerId}.battleCardsPlayedThisRound`]: 0,
+          [`players.${nextPlayerId}.battleCardsPlayedThisRound`]: 0,
+          currentRound: currentRound + 1,
+          // Give energy to all players when round advances
+          ...playerIds.reduce((acc, playerId) => {
+            acc[`players.${playerId}.energy`] = increment(15);
+            return acc;
+          }, {} as any),
+          lastActivity: Date.now()
+        });
+      } else {
+        // Not last player - just switch turns, no energy or round change
+        await updateDoc(battleRef, {
+          currentTurn: nextPlayerId,
+          [`players.${currentPlayerId}.battleCardsPlayedThisRound`]: 0,
+          lastActivity: Date.now()
+        });
+      }
       return true;
     } catch (error) {
       console.error('Error ending player turn:', error);

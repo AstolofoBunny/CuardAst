@@ -1250,22 +1250,31 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                   <div className="mt-4 flex justify-center space-x-4">
                                     <Button 
                                       onClick={() => placeBattleCard('left')} 
-                                      disabled={!!battlefield.left || playerEnergy < 20 || battleCardsPlayedThisRound >= 1 || !isPlayerTurn}
-                                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
+                                      disabled={!!(currentBattle && user ? currentBattle.players[user.uid]?.battlefield?.left : null) || 
+                                        (currentBattle && user ? (currentBattle.players[user.uid]?.energy || 0) < 20 : true) || 
+                                        (currentBattle && user ? (currentBattle.players[user.uid]?.battleCardsPlayedThisRound || 0) >= 1 : true) || 
+                                        (currentBattle && user ? currentBattle.currentTurn !== user.uid : true)}
+                                      className={`${!!(currentBattle && user ? currentBattle.players[user.uid]?.battlefield?.left : null) ? 'bg-gray-500' : 'bg-green-600 hover:bg-green-700'} disabled:bg-gray-500`}
                                     >
                                       Left Field (20 Energy)
                                     </Button>
                                     <Button 
                                       onClick={() => placeBattleCard('center')} 
-                                      disabled={!!battlefield.center || playerEnergy < 20 || battleCardsPlayedThisRound >= 1 || !isPlayerTurn}
-                                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
+                                      disabled={!!(currentBattle && user ? currentBattle.players[user.uid]?.battlefield?.center : null) || 
+                                        (currentBattle && user ? (currentBattle.players[user.uid]?.energy || 0) < 20 : true) || 
+                                        (currentBattle && user ? (currentBattle.players[user.uid]?.battleCardsPlayedThisRound || 0) >= 1 : true) || 
+                                        (currentBattle && user ? currentBattle.currentTurn !== user.uid : true)}
+                                      className={`${!!(currentBattle && user ? currentBattle.players[user.uid]?.battlefield?.center : null) ? 'bg-gray-500' : 'bg-green-600 hover:bg-green-700'} disabled:bg-gray-500`}
                                     >
                                       Center Field (20 Energy)
                                     </Button>
                                     <Button 
                                       onClick={() => placeBattleCard('right')} 
-                                      disabled={!!battlefield.right || playerEnergy < 20 || battleCardsPlayedThisRound >= 1 || !isPlayerTurn}
-                                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
+                                      disabled={!!(currentBattle && user ? currentBattle.players[user.uid]?.battlefield?.right : null) || 
+                                        (currentBattle && user ? (currentBattle.players[user.uid]?.energy || 0) < 20 : true) || 
+                                        (currentBattle && user ? (currentBattle.players[user.uid]?.battleCardsPlayedThisRound || 0) >= 1 : true) || 
+                                        (currentBattle && user ? currentBattle.currentTurn !== user.uid : true)}
+                                      className={`${!!(currentBattle && user ? currentBattle.players[user.uid]?.battlefield?.right : null) ? 'bg-gray-500' : 'bg-green-600 hover:bg-green-700'} disabled:bg-gray-500`}
                                     >
                                       Right Field (20 Energy)
                                     </Button>
@@ -1284,7 +1293,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                     <div className="mb-4 p-3 bg-yellow-600 bg-opacity-50 border border-yellow-400 rounded">
                                       <div className="text-yellow-200 font-bold">Select Attack Target</div>
                                       <div className="text-sm text-yellow-300">
-                                        {battlefield[selectedAttacker]?.name} is ready to attack!
+                                        {(currentBattle && user && selectedAttacker ? currentBattle.players[user.uid]?.battlefield?.[selectedAttacker]?.name : '')} is ready to attack!
                                       </div>
                                     </div>
                                     <Button 
@@ -1302,11 +1311,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                               <div className="flex justify-center mt-6 space-x-4">
                                 <Button 
                                   onClick={endPlayerTurn}
-                                  disabled={!isPlayerTurn}
+                                  disabled={!(currentBattle && user ? currentBattle.currentTurn === user.uid : false)}
                                   className="bg-green-600 hover:bg-green-700 disabled:bg-gray-500 px-6"
                                 >
                                   <i className="fas fa-play mr-2"></i>
-                                  End Turn
+                                  end the move
                                 </Button>
                                 <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-700 px-6">
                                   <i className="fas fa-shield mr-2"></i>
