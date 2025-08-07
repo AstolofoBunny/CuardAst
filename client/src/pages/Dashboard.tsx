@@ -179,7 +179,8 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
           const playerData = battleData.players?.[user?.uid];
           if (user && playerData && playerData.deck?.length === 0 && user.deck && user.deck.length >= 10) {
             const { hand, remainingDeck } = distributeCards(user.deck);
-            updateDoc(doc(db, 'battles', currentRoom.battleId), {
+            const battleRef = doc(db, 'battles', currentRoom.battleId);
+            updateDoc(battleRef, {
               [`players.${user.uid}.deck`]: remainingDeck,
               [`players.${user.uid}.hand`]: hand
             });
@@ -1049,7 +1050,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                 {/* Player Field */}
                                 <div className="flex space-x-4 justify-center mb-6">
                                   {(['left', 'center', 'right'] as const).map((position) => {
-                                    const placedCard = battlefield[position];
+                                    const placedCard = currentBattle && user ? currentBattle.players[user.uid]?.battlefield?.[position] : null;
                                     return (
                                       <div 
                                         key={position} 
@@ -1112,11 +1113,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                     <div className="flex flex-col space-y-1">
                                       <div className="text-xs text-blue-400 font-bold">Your HP: {currentBattle && user ? currentBattle.players[user.uid]?.hp || 50 : 50}/50</div>
                                       <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${(playerHP / 50) * 100}%` }}></div>
+                                        <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${((currentBattle && user ? currentBattle.players[user.uid]?.hp || 50 : 50) / 50) * 100}%` }}></div>
                                       </div>
                                       <div className="text-xs text-green-400">Energy: {currentBattle && user ? currentBattle.players[user.uid]?.energy || 100 : 100}/100</div>
                                       <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-green-500 rounded-full transition-all duration-300" style={{ width: `${(playerEnergy / 100) * 100}%` }}></div>
+                                        <div className="h-full bg-green-500 rounded-full transition-all duration-300" style={{ width: `${((currentBattle && user ? currentBattle.players[user.uid]?.energy || 100 : 100) / 100) * 100}%` }}></div>
                                       </div>
                                     </div>
                                   </div>
@@ -1181,8 +1182,8 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                   <div className="flex flex-col items-center">
                                     <h3 className="text-sm font-bold text-blue-400 mb-2">Your Hand</h3>
                                     <div className="flex space-x-2">
-                                      {playerHand.length > 0 ? (
-                                        playerHand.map((cardId, index) => {
+                                      {(currentBattle && user ? currentBattle.players[user.uid]?.hand?.length > 0 : false) ? (
+                                        (currentBattle && user ? currentBattle.players[user.uid]?.hand || [] : []).map((cardId: string, index: number) => {
                                           const card = cards.find(c => c.id === cardId);
                                           const isSelected = selectedCard === cardId;
                                           return (
