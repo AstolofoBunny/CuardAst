@@ -5,6 +5,7 @@ import { GameCard } from '@/components/GameCard';
 import { Battle, GameCard as GameCardType } from '@/types/game';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore } from '@/hooks/useFirestore';
+import { useToast } from '@/hooks/use-toast';
 import { doc, onSnapshot, DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -15,9 +16,11 @@ interface BattleInterfaceProps {
 
 export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProps) {
   const { user, updateUserHP, updateUserEnergy, updateUserStats } = useAuth();
-  const { cards, updateBattle, markPlayerReady } = useFirestore();
+  const { cards, updateBattle, markPlayerReady, checkAITurn } = useFirestore();
+  const { toast } = useToast();
   const [battle, setBattle] = useState<Battle | null>(null);
   const [selectedBattleCard, setSelectedBattleCard] = useState<string>('');
+  const [selectedPosition, setSelectedPosition] = useState<'left' | 'center' | 'right' | null>(null);
   const [selectedAbilities, setSelectedAbilities] = useState<string[]>([]);
   const [isReady, setIsReady] = useState(false);
 
@@ -29,13 +32,19 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
       doc(db, 'battles', battleId),
       (doc: DocumentSnapshot<DocumentData>) => {
         if (doc.exists()) {
-          setBattle(doc.data() as Battle);
+          const battleData = doc.data() as Battle;
+          setBattle(battleData);
+          
+          // Check if AI needs to make a move
+          if (battleData && checkAITurn) {
+            checkAITurn(battleData);
+          }
         }
       }
     );
 
     return () => unsubscribe();
-  }, [battleId]);
+  }, [battleId, checkAITurn]);
 
   if (!battle || !user) {
     return (
@@ -100,6 +109,53 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
     setSelectedBattleCard(cardId);
   };
 
+  const handlePlaceCard = async (position: 'left' | 'center' | 'right') => {
+    if (!selectedBattleCard || !user || !battle) return;
+    
+    const card = cards.find(c => c.id === selectedBattleCard);
+    if (!card) return;
+    
+    // Check if position is already occupied
+    if (playerData.battlefield[position]) {
+      toast({
+        title: "Position Occupied",
+        description: "This position already has a card!",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Check if player has enough energy
+    if (playerData.energy < 20) {
+      toast({
+        title: "Not Enough Energy",
+        description: "You need 20 energy to place a battle card!",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const updatedBattle = {
+      ...battle,
+      players: {
+        ...battle.players,
+        [user.uid]: {
+          ...playerData,
+          battlefield: {
+            ...playerData.battlefield,
+            [position]: card
+          },
+          energy: playerData.energy - 20,
+          hand: playerData.hand.filter(cardId => cardId !== selectedBattleCard)
+        }
+      }
+    };
+    
+    await updateBattle(battleId, updatedBattle);
+    setSelectedBattleCard('');
+    setSelectedPosition(null);
+  };
+
   const handleMarkReady = async () => {
     if (!user || !battle) return;
     await markPlayerReady(battleId, battleId, user.uid);
@@ -161,7 +217,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
               size="sm"
             >
               <i className="fas fa-door-open mr-1"></i>
-              Leave Battle
+              {playerData ? 'Leave Battle' : 'Stop Watching'}
             </Button>
           </div>
 
@@ -254,12 +310,94 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
           </div>
         )}
 
+        {/* Battlefield Display */}
+        <div className="bg-gray-800 border border-purple-600 rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-bold text-purple-400 mb-4 text-center">
+            <i className="fas fa-chess-board mr-2"></i>
+            Battle Field
+          </h2>
+          
+          {/* Opponent's Battlefield */}
+          <div className="mb-6">
+            <h3 className="text-sm font-bold text-red-400 mb-2">{opponentData?.displayName || 'Opponent'}'s Cards</h3>
+            <div className="flex justify-center space-x-4">
+              {['left', 'center', 'right'].map((position) => {
+                const card = opponentData?.battlefield?.[position as 'left' | 'center' | 'right'];
+                return (
+                  <div key={position} className="w-24 h-32 border-2 border-red-500 rounded-lg bg-gray-700 flex items-center justify-center">
+                    {card ? (
+                      <div className="text-center p-1">
+                        <div className="text-xs font-bold text-red-300 truncate">{card.name}</div>
+                        <div className="text-xs text-gray-300 mt-1">
+                          <div>⚔️{card.attack}</div>
+                          <div>🛡️{card.defense}</div>
+                          <div>❤️{card.health}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-500 text-xs">{position}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          
+          {/* VS Divider */}
+          <div className="text-center text-2xl font-bold text-yellow-400 mb-6">
+            ⚔️ VS ⚔️
+          </div>
+          
+          {/* Player's Battlefield */}
+          <div>
+            <h3 className="text-sm font-bold text-blue-400 mb-2">Your Cards</h3>
+            <div className="flex justify-center space-x-4">
+              {['left', 'center', 'right'].map((position) => {
+                const card = playerData.battlefield[position as 'left' | 'center' | 'right'];
+                const isSelected = selectedPosition === position;
+                return (
+                  <div 
+                    key={position} 
+                    className={`w-24 h-32 border-2 rounded-lg bg-gray-700 flex items-center justify-center cursor-pointer transition-all duration-200 ${
+                      isSelected ? 'border-yellow-400 bg-yellow-900' : 
+                      card ? 'border-blue-500' : 'border-gray-500 hover:border-blue-400'
+                    }`}
+                    onClick={() => {
+                      if (!card && selectedBattleCard) {
+                        handlePlaceCard(position as 'left' | 'center' | 'right');
+                      }
+                    }}
+                  >
+                    {card ? (
+                      <div className="text-center p-1">
+                        <div className="text-xs font-bold text-blue-300 truncate">{card.name}</div>
+                        <div className="text-xs text-gray-300 mt-1">
+                          <div>⚔️{card.attack}</div>
+                          <div>🛡️{card.defense}</div>
+                          <div>❤️{card.health}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <span className="text-gray-500 text-xs">{position}</span>
+                        {selectedBattleCard && (
+                          <div className="text-xs text-yellow-400 mt-1">Click to place</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         {/* Card Selection Area */}
         <div className="space-y-6">
           <div>
             <h3 className="text-lg font-bold text-yellow-400 mb-4">
               <i className="fas fa-layer-group mr-2"></i>
-              Select Battle Card
+              Select Battle Card {selectedBattleCard && '(Click on battlefield position to place)'}
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {playerBattleCards.map((card) => (

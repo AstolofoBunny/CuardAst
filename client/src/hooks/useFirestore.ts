@@ -605,6 +605,84 @@ export function useFirestore() {
     }
   };
 
+  // AI Bot Logic
+  const makeAIMove = async (battleId: string, aiPlayerId: string, battle: Battle) => {
+    try {
+      const aiPlayer = battle.players[aiPlayerId];
+      if (!aiPlayer || aiPlayer.uid !== 'ai_opponent') return;
+
+      // Wait 2-3 seconds to simulate thinking
+      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+      // AI Strategy: Place battle cards if has energy
+      const battleCards = cards.filter(card => card.type === 'battle');
+      if (aiPlayer.energy >= 20 && battleCards.length > 0) {
+        // Find empty position
+        const positions: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
+        const emptyPositions = positions.filter(pos => !aiPlayer.battlefield[pos]);
+        
+        if (emptyPositions.length > 0) {
+          // Pick random card and position
+          const randomCard = battleCards[Math.floor(Math.random() * battleCards.length)];
+          const randomPosition = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
+          
+          const updatedBattle = {
+            ...battle,
+            players: {
+              ...battle.players,
+              [aiPlayerId]: {
+                ...aiPlayer,
+                battlefield: {
+                  ...aiPlayer.battlefield,
+                  [randomPosition]: randomCard
+                },
+                energy: aiPlayer.energy - 20,
+                isReady: true
+              }
+            }
+          };
+          
+          await updateBattle(battleId, updatedBattle);
+          return;
+        }
+      }
+
+      // If can't place battle card, just mark as ready
+      const updatedBattle = {
+        ...battle,
+        players: {
+          ...battle.players,
+          [aiPlayerId]: {
+            ...aiPlayer,
+            isReady: true
+          }
+        }
+      };
+      
+      await updateBattle(battleId, updatedBattle);
+    } catch (error) {
+      console.error('Error making AI move:', error);
+    }
+  };
+
+  // Check if it's AI's turn and make move
+  const checkAITurn = async (battle: Battle) => {
+    if (!battle || battle.status !== 'active') return;
+    
+    const aiPlayer = Object.values(battle.players).find(p => p.uid === 'ai_opponent');
+    if (!aiPlayer) return;
+    
+    // If it's AI turn or AI is not ready in preparation phase
+    if ((battle.currentTurn === 'ai_opponent' || (battle.phase === 'preparation' && !aiPlayer.isReady))) {
+      // Get battle document ID from the battles collection
+      const battleSnapshot = await getDocs(query(collection(db, 'battles'), where('roomId', '==', battle.roomId)));
+      if (!battleSnapshot.empty) {
+        const battleDoc = battleSnapshot.docs[0];
+        await makeAIMove(battleDoc.id, 'ai_opponent', battle);
+      }
+    }
+  };
+
   // Battle action functions for server-side battle state
   const placeBattleCardInBattle = async (battleId: string, playerId: string, cardId: string, position: 'left' | 'center' | 'right', cardData: GameCard) => {
     try {
@@ -800,6 +878,7 @@ export function useFirestore() {
     useMagicCardInBattle,
     drawCardInBattle,
     endPlayerTurnInBattle,
-    attackInBattle
+    attackInBattle,
+    checkAITurn
   };
 }

@@ -5,6 +5,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore } from '@/hooks/useFirestore';
 import { DeckBuilder } from '@/components/DeckBuilder';
@@ -31,7 +41,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [activeTab, setActiveTab] = useState(initialTab);
   const [battleSubTab, setBattleSubTab] = useState(initialBattleSubTab || 'waiting-room');
   const [location, navigate] = useLocation();
-  const { rooms, rankings, cards, chatMessages, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms, sendChatMessage, distributeCards, getUserById, markPlayerReadyInRoom, placeBattleCardInBattle, useMagicCardInBattle, drawCardInBattle, endPlayerTurnInBattle, attackInBattle } = useFirestore();
+  const { rooms, rankings, cards, chatMessages, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms, sendChatMessage, distributeCards, getUserById, markPlayerReadyInRoom, placeBattleCardInBattle, useMagicCardInBattle, drawCardInBattle, endPlayerTurnInBattle, attackInBattle, updateBattle } = useFirestore();
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
   const [chatCollapsed, setChatCollapsed] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
@@ -65,6 +75,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [currentBattle, setCurrentBattle] = useState<any>(null);
   const [battleLoading, setBattleLoading] = useState(false);
+  const [showSurrenderDialog, setShowSurrenderDialog] = useState(false);
 
   // Room form state
   const [roomForm, setRoomForm] = useState({
@@ -177,7 +188,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
           
           // Initialize player deck and hand if empty and user has a deck
           const playerData = battleData.players?.[user?.uid];
-          if (user && playerData && playerData.deck?.length === 0 && user.deck && user.deck.length >= 10) {
+          if (user && playerData && playerData.deck?.length === 0 && user.deck && user.deck.length >= 10 && currentRoom?.battleId) {
             const { hand, remainingDeck } = distributeCards(user.deck);
             const battleRef = doc(db, 'battles', currentRoom.battleId);
             updateDoc(battleRef, {
@@ -440,6 +451,53 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
         console.log(`Round ${currentRound + 1} started`);
       }, 1000);
     }, 2000);
+  };
+
+  // Surrender function with Firebase synchronization
+  const handleSurrender = async () => {
+    if (!currentBattle || !user || !currentRoom?.battleId) return;
+    
+    try {
+      // Update battle to mark as finished with opponent as winner
+      const opponentId = Object.keys(currentBattle.players).find(id => id !== user.uid);
+      
+      const updatedBattle = {
+        ...currentBattle,
+        status: 'finished',
+        phase: 'finished',
+        winner: opponentId || 'unknown'
+      };
+      
+      await updateBattle(currentRoom.battleId, updatedBattle);
+      
+      // Reset local battle state
+      setCurrentRoomId(null);
+      setCurrentRound(1);
+      setIsPlayerTurn(true);
+      setBattleCardsPlayedThisRound(0);
+      setPlayerEnergy(100);
+      setPlayerHP(50);
+      setBattlefield({ left: null, center: null, right: null });
+      setEnemyBattlefield({ left: null, center: null, right: null });
+      
+      // Show notification to user
+      toast({
+        title: "Поражение",
+        description: "Вы сдались в бою",
+        variant: "destructive"
+      });
+      
+      // Navigate back to ranking
+      handleTabChange('ranking');
+      
+    } catch (error) {
+      console.error('Error surrendering:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось сдаться",
+        variant: "destructive"
+      });
+    }
   };
 
   // End player turn function - now uses server-side battle
@@ -1322,18 +1380,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                   Defend
                                 </Button>
                                 <Button
-                                  onClick={() => {
-                                    setCurrentRoomId(null);
-                                    // Reset battle state
-                                    setCurrentRound(1);
-                                    setIsPlayerTurn(true);
-                                    setBattleCardsPlayedThisRound(0);
-                                    setPlayerEnergy(100);
-                                    setPlayerHP(50);
-                                    setBattlefield({ left: null, center: null, right: null });
-                                    setEnemyBattlefield({ left: null, center: null, right: null });
-                                    handleTabChange('ranking');
-                                  }}
+                                  onClick={() => setShowSurrenderDialog(true)}
                                   variant="destructive"
                                   className="px-6"
                                 >
@@ -1611,8 +1658,25 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                             )}
                           </Button>
                           
-                          {/* Delete button for room hosts or admins */}
-                          {user && (user.uid === room.hostId || user.isAdmin) && (
+                          {/* Watch Battle button for active rooms */}
+                          {room.status === 'active' && room.battleId && (
+                            <Button
+                              onClick={() => {
+                                setCurrentRoomId(room.id);
+                                setActiveTab('battle');
+                                setBattleSubTab('fight');
+                                navigate('/battle/fight');
+                              }}
+                              size="sm"
+                              className="bg-purple-600 hover:bg-purple-700 text-white px-3"
+                            >
+                              <i className="fas fa-eye mr-1"></i>
+                              Watch
+                            </Button>
+                          )}
+                          
+                          {/* Delete button for room hosts or admins - only for non-active rooms */}
+                          {user && (user.uid === room.hostId || user.isAdmin) && room.status !== 'active' && (
                             <Button
                               onClick={async () => {
                                 if (confirm(`Delete room "${room.name}"?`)) {
@@ -1887,6 +1951,30 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
         open={showAuthModal} 
         onClose={() => setShowAuthModal(false)} 
       />
+
+      {/* Surrender Confirmation Dialog */}
+      <AlertDialog open={showSurrenderDialog} onOpenChange={setShowSurrenderDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Подтвердить сдачу</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы действительно хотите сдаться? Это будет засчитано как поражение, и ваш противник получит победу.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowSurrenderDialog(false);
+                handleSurrender();
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Да, сдаться
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
