@@ -95,7 +95,8 @@ export interface User {
   losses: number;
   hp: number;
   energy: number;
-  deck: string[];
+  deck: string[]; // Battle cards deck (10 cards)
+  spellDeck: string[]; // Spell cards deck (3 cards)
   createdAt: number;
   profilePicture?: string;
 }
@@ -126,6 +127,8 @@ export interface Battle {
       energy: number;
       deck: string[];
       hand: string[];
+      spellDeck: string[]; // Available spell cards
+      spellCooldowns: { [spellId: string]: number }; // Cooldown rounds remaining
       battlefield: {
         left: string | null; // Card ID
         center: string | null; // Card ID  

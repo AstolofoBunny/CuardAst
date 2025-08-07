@@ -499,13 +499,31 @@ export function useFirestore() {
       await updateDoc(userRef, { deck });
       toast({
         title: "Success",
-        description: "Deck saved successfully!"
+        description: "Battle deck saved successfully!"
       });
     } catch (error) {
       console.error('Error updating deck:', error);
       toast({
         title: "Error",
-        description: "Failed to save deck",
+        description: "Failed to save battle deck",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const updateUserSpellDeck = async (userId: string, spellDeck: string[]) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, { spellDeck });
+      toast({
+        title: "Success",
+        description: "Spell deck saved successfully!"
+      });
+    } catch (error) {
+      console.error('Error updating spell deck:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save spell deck",
         variant: "destructive"
       });
     }
@@ -1125,6 +1143,7 @@ export function useFirestore() {
     createBattle,
     updateBattle,
     updateUserDeck,
+    updateUserSpellDeck,
     createTestRooms,
     sendChatMessage,
     distributeCards,

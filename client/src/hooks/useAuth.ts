@@ -46,6 +46,7 @@ export function useAuth() {
               hp: 20,
               energy: 100,
               deck: [],
+              spellDeck: [],
               createdAt: Date.now()
             };
 
@@ -112,6 +113,7 @@ export function useAuth() {
         hp: 20,
         energy: 100,
         deck: [],
+        spellDeck: [],
         createdAt: Date.now()
       };
 
@@ -230,6 +232,7 @@ export function useAuth() {
             hp: 20,
             energy: 100,
             deck: [],
+            spellDeck: [],
             createdAt: Date.now()
           };
 

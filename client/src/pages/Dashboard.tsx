@@ -650,19 +650,12 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                 Find Room
               </TabsTrigger>
               <TabsTrigger
-                value="cards"
-                className="w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white"
-              >
-                <i className="fas fa-th-large mr-3"></i>
-                Cards
-              </TabsTrigger>
-              <TabsTrigger
                 value="deck"
                 disabled={isGuest}
                 className={`w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white ${isGuest ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <i className="fas fa-layer-group mr-3"></i>
-                My Deck {isGuest && '(Login Required)'}
+                Cards & Deck {isGuest && '(Login Required)'}
               </TabsTrigger>
 
               <TabsTrigger
@@ -1639,19 +1632,32 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                             </Button>
                           )}
                           
-                          {/* Delete button for room hosts or admins - only for non-active rooms */}
-                          {user && (user.uid === room.hostId || user.isAdmin) && room.status !== 'active' && (
+                          {/* Delete button for room hosts (non-active only) or admins (any room) */}
+                          {user && (
+                            (user.uid === room.hostId && room.status !== 'active') || 
+                            user.isAdmin
+                          ) && (
                             <Button
                               onClick={async () => {
-                                if (confirm(`Delete room "${room.name}"?`)) {
+                                const isActiveRoom = room.status === 'active';
+                                const confirmMessage = isActiveRoom 
+                                  ? `⚠️ WARNING: This will terminate an active battle!\n\nDelete room "${room.name}"?`
+                                  : `Delete room "${room.name}"?`;
+                                
+                                if (confirm(confirmMessage)) {
                                   await deleteRoom(room.id);
                                 }
                               }}
                               variant="outline"
                               size="sm"
-                              className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white px-3"
+                              className={`hover:text-white px-3 ${
+                                room.status === 'active' 
+                                  ? 'border-orange-600 text-orange-400 hover:bg-orange-600' 
+                                  : 'border-red-600 text-red-400 hover:bg-red-600'
+                              }`}
+                              title={user.isAdmin ? 'Admin: Delete any room' : 'Delete your room'}
                             >
-                              <i className="fas fa-times"></i>
+                              <i className={`fas ${room.status === 'active' ? 'fa-exclamation-triangle' : 'fa-times'}`}></i>
                             </Button>
                           )}
                         </div>
@@ -1662,12 +1668,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
               </div>
             )}
 
-            {/* Cards Tab */}
-            {activeTab === 'cards' && (
-              <CardsGrid cards={cards} />
-            )}
-
-            {/* Deck Tab */}
+            {/* Cards & Deck Tab */}
             {activeTab === 'deck' && (
               <div>
                 {isGuest ? (
@@ -1675,7 +1676,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                     <div className="bg-gray-800 border border-blue-600 rounded-lg p-8">
                       <i className="fas fa-lock text-4xl text-gray-400 mb-4"></i>
                       <h3 className="text-xl font-bold text-yellow-400 mb-2">Login Required</h3>
-                      <p className="text-gray-400 mb-4">You need to login to build and manage your deck</p>
+                      <p className="text-gray-400 mb-4">You need to login to browse cards and build your deck</p>
                       <Button
                         onClick={() => setShowAuthModal(true)}
                         className="bg-green-600 hover:bg-green-700"
@@ -1686,7 +1687,31 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                     </div>
                   </div>
                 ) : (
-                  <DeckBuilder />
+                  <div className="space-y-8">
+                    {/* Cards Collection Section */}
+                    <div>
+                      <div className="mb-6">
+                        <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                          <i className="fas fa-th-large mr-2"></i>
+                          Card Collection
+                        </h2>
+                        <p className="text-gray-400">Browse all available cards and their statistics</p>
+                      </div>
+                      <CardsGrid cards={cards} />
+                    </div>
+                    
+                    {/* Deck Builder Section */}
+                    <div className="border-t border-gray-700 pt-8">
+                      <div className="mb-6">
+                        <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                          <i className="fas fa-layer-group mr-2"></i>
+                          Deck Builder
+                        </h2>
+                        <p className="text-gray-400">Build and customize your battle deck</p>
+                      </div>
+                      <DeckBuilder />
+                    </div>
+                  </div>
                 )}
               </div>
             )}
