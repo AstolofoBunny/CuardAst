@@ -41,7 +41,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [activeTab, setActiveTab] = useState(initialTab);
   const [battleSubTab, setBattleSubTab] = useState(initialBattleSubTab || 'waiting-room');
   const [location, navigate] = useLocation();
-  const { rooms, rankings, cards, chatMessages, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms, sendChatMessage, distributeCards, getUserById, markPlayerReadyInRoom, placeBattleCardInBattle, useMagicCardInBattle, drawCardInBattle, endPlayerTurnInBattle, attackInBattle, updateBattle } = useFirestore();
+  const { rooms, rankings, cards, chatMessages, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms, sendChatMessage, distributeCards, getUserById, markPlayerReadyInRoom, placeBattleCardInBattle, useMagicCardInBattle, drawCardInBattle, endPlayerTurnInBattle, attackInBattle, updateBattle, checkAITurn } = useFirestore();
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
   const [chatCollapsed, setChatCollapsed] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
@@ -181,7 +181,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     setBattleLoading(true);
     const unsubscribe = onSnapshot(
       doc(db, 'battles', currentRoom.battleId),
-      (battleDoc) => {
+      async (battleDoc) => {
         if (battleDoc.exists()) {
           const battleData = { id: battleDoc.id, ...battleDoc.data() } as any;
           setCurrentBattle(battleData);
@@ -196,6 +196,16 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
               [`players.${user.uid}.hand`]: hand
             });
           }
+          
+          // Check if AI needs to make a move
+          const aiPlayer = Object.values(battleData.players || {}).find((p: any) => p.uid === 'ai_opponent');
+          if (aiPlayer) {
+            console.log('AI opponent detected, checking turn...');
+            // Small delay to avoid immediate multiple calls
+            setTimeout(() => {
+              checkAITurn(battleData);
+            }, 1000);
+          }
         }
         setBattleLoading(false);
       },
@@ -206,7 +216,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     );
 
     return () => unsubscribe();
-  }, [currentRoom?.battleId, user, distributeCards]);
+  }, [currentRoom?.battleId, user, distributeCards, checkAITurn]);
 
   // Auto-navigate to fight when all players ready (will be defined after handleBattleSubTabChange)
 
@@ -453,51 +463,40 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }, 2000);
   };
 
-  // Surrender function with Firebase synchronization
+  // Surrender function - copy logic from deleteRoom for proper cleanup
   const handleSurrender = async () => {
-    if (!currentBattle || !user || !currentRoom?.battleId) return;
+    if (!currentRoom || !user) return;
     
     try {
-      // Update battle to mark as finished with opponent as winner
-      const opponentId = Object.keys(currentBattle.players).find(id => id !== user.uid);
-      
-      const updatedBattle = {
-        ...currentBattle,
-        status: 'finished',
-        phase: 'finished',
-        winner: opponentId || 'unknown'
-      };
-      
-      await updateBattle(currentRoom.battleId, updatedBattle);
-      
-      // Update room status to finished as well
-      const roomRef = doc(db, 'rooms', currentRoom.id);
-      await updateDoc(roomRef, {
-        status: 'finished',
-        lastActivity: Date.now()
-      });
-      
-      // Reset local battle state
-      setCurrentRoomId(null);
-      setCurrentBattle(null);
-      setCurrentRound(1);
-      setIsPlayerTurn(true);
-      setBattleCardsPlayedThisRound(0);
-      setPlayerEnergy(100);
-      setPlayerHP(50);
-      setBattlefield({ left: null, center: null, right: null });
-      setEnemyBattlefield({ left: null, center: null, right: null });
-      
-      // Show notification to user
-      toast({
-        title: "Defeat",
-        description: "You surrendered the battle",
-        variant: "destructive"
-      });
-      
-      // Navigate back to ranking
-      handleTabChange('ranking');
-      
+      // Use the same logic as deleteRoom - delete battle first, then room
+      const success = await deleteRoom(currentRoom.id);
+      if (success) {
+        // Reset local battle state
+        setCurrentRoomId(null);
+        setCurrentBattle(null);
+        setCurrentRound(1);
+        setIsPlayerTurn(true);
+        setBattleCardsPlayedThisRound(0);
+        setPlayerEnergy(100);
+        setPlayerHP(50);
+        setBattlefield({ left: null, center: null, right: null });
+        setEnemyBattlefield({ left: null, center: null, right: null });
+        setSelectedCard(null);
+        setShowPlacementButtons(false);
+        setSelectedAttacker(null);
+        setShowAttackTargets(false);
+        setIsPlayerReady(false);
+        
+        // Navigate back to ranking
+        handleTabChange('ranking');
+        
+        // Show surrender notification
+        toast({
+          title: "Defeat",
+          description: "You surrendered the battle",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error('Error surrendering:', error);
       toast({

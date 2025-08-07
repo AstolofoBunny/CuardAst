@@ -605,61 +605,81 @@ export function useFirestore() {
     }
   };
 
-  // AI Bot Logic
+  // AI Bot Logic - Enhanced with proper card handling
   const makeAIMove = async (battleId: string, aiPlayerId: string, battle: Battle) => {
     try {
       const aiPlayer = battle.players[aiPlayerId];
       if (!aiPlayer || aiPlayer.uid !== 'ai_opponent') return;
 
+      console.log('AI making move for battle:', battleId);
+      
       // Wait 2-3 seconds to simulate thinking
       await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
 
-      // AI Strategy: Place battle cards if has energy
-      const battleCards = cards.filter(card => card.type === 'battle');
-      if (aiPlayer.energy >= 20 && battleCards.length > 0) {
+      // Initialize AI deck if empty
+      if (aiPlayer.deck.length === 0 && aiPlayer.hand.length === 0) {
+        const battleCards = cards.filter(card => card.type === 'battle' && card.isBase);
+        if (battleCards.length > 0) {
+          // Create AI deck with random base cards
+          const aiDeck = [];
+          for (let i = 0; i < 10; i++) {
+            const randomCard = battleCards[Math.floor(Math.random() * battleCards.length)];
+            aiDeck.push(randomCard.id);
+          }
+          
+          const { hand, remainingDeck } = distributeCards(aiDeck);
+          
+          const battleRef = doc(db, 'battles', battleId);
+          await updateDoc(battleRef, {
+            [`players.${aiPlayerId}.deck`]: remainingDeck,
+            [`players.${aiPlayerId}.hand`]: hand,
+            lastActivity: Date.now()
+          });
+          
+          console.log('AI deck initialized with', aiDeck.length, 'cards');
+          return; // End turn after initializing deck
+        }
+      }
+
+      // AI Strategy: Place battle cards if has energy and cards in hand
+      if (aiPlayer.energy >= 20 && aiPlayer.hand.length > 0) {
         // Find empty position
         const positions: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
         const emptyPositions = positions.filter(pos => !aiPlayer.battlefield[pos]);
         
         if (emptyPositions.length > 0) {
-          // Pick random card and position
-          const randomCard = battleCards[Math.floor(Math.random() * battleCards.length)];
-          const randomPosition = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
+          // Pick random card from hand
+          const randomCardId = aiPlayer.hand[Math.floor(Math.random() * aiPlayer.hand.length)];
+          const randomCard = cards.find(c => c.id === randomCardId);
           
-          const updatedBattle = {
-            ...battle,
-            players: {
-              ...battle.players,
-              [aiPlayerId]: {
-                ...aiPlayer,
-                battlefield: {
-                  ...aiPlayer.battlefield,
-                  [randomPosition]: randomCard
-                },
-                energy: aiPlayer.energy - 20,
-                isReady: true
-              }
-            }
-          };
-          
-          await updateBattle(battleId, updatedBattle);
-          return;
+          if (randomCard && randomCard.type === 'battle') {
+            const randomPosition = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
+            
+            console.log(`AI placing ${randomCard.name} at ${randomPosition}`);
+            
+            // Use the same function as players to place cards
+            await placeBattleCardInBattle(battleId, aiPlayerId, randomCardId, randomPosition, randomCard);
+            return;
+          }
         }
       }
 
-      // If can't place battle card, just mark as ready
-      const updatedBattle = {
-        ...battle,
-        players: {
-          ...battle.players,
-          [aiPlayerId]: {
-            ...aiPlayer,
-            isReady: true
-          }
-        }
-      };
+      // If can't place cards, draw a card if possible
+      if (aiPlayer.hand.length < 5 && aiPlayer.deck.length > 0 && aiPlayer.energy >= 5) {
+        await drawCardInBattle(battleId, aiPlayerId, aiPlayer.deck);
+        console.log('AI drew a card');
+        return;
+      }
+
+      // If nothing else to do, end turn
+      const playerIds = Object.keys(battle.players);
+      const currentIndex = playerIds.indexOf(aiPlayerId);
+      const nextIndex = (currentIndex + 1) % playerIds.length;
+      const nextPlayerId = playerIds[nextIndex];
       
-      await updateBattle(battleId, updatedBattle);
+      console.log('AI ending turn, next player:', nextPlayerId);
+      await endPlayerTurnInBattle(battleId, aiPlayerId, nextPlayerId, battle.currentRound);
+      
     } catch (error) {
       console.error('Error making AI move:', error);
     }
@@ -667,19 +687,33 @@ export function useFirestore() {
 
   // Check if it's AI's turn and make move
   const checkAITurn = async (battle: Battle) => {
-    if (!battle || battle.status !== 'active') return;
+    if (!battle || battle.status === 'finished') return;
     
     const aiPlayer = Object.values(battle.players).find(p => p.uid === 'ai_opponent');
     if (!aiPlayer) return;
     
+    console.log('Checking AI turn:', {
+      currentTurn: battle.currentTurn,
+      phase: battle.phase,
+      aiReady: aiPlayer.isReady,
+      status: battle.status
+    });
+    
     // If it's AI turn or AI is not ready in preparation phase
-    if ((battle.currentTurn === 'ai_opponent' || (battle.phase === 'preparation' && !aiPlayer.isReady))) {
+    if (battle.currentTurn === 'ai_opponent' || (battle.phase === 'preparation' && !aiPlayer.isReady)) {
+      console.log('AI should make a move!');
+      
       // Get battle document ID from the battles collection
       const battleSnapshot = await getDocs(query(collection(db, 'battles'), where('roomId', '==', battle.roomId)));
       if (!battleSnapshot.empty) {
         const battleDoc = battleSnapshot.docs[0];
+        console.log('Found battle document, calling makeAIMove...');
         await makeAIMove(battleDoc.id, 'ai_opponent', battle);
+      } else {
+        console.error('Battle document not found for roomId:', battle.roomId);
       }
+    } else {
+      console.log('Not AI turn or AI already ready');
     }
   };
 

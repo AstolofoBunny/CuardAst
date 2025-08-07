@@ -225,8 +225,16 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
           <div className="flex items-center justify-between">
             {/* Player (Left Side) */}
             <div className="flex items-center space-x-6">
-              <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center border-4 border-blue-400">
-                <i className="fas fa-user text-3xl"></i>
+              <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center border-4 border-blue-400 overflow-hidden">
+                {user.profilePicture ? (
+                  <img 
+                    src={user.profilePicture} 
+                    alt={user.displayName}
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                ) : (
+                  <i className="fas fa-user text-3xl"></i>
+                )}
               </div>
               <div>
                 <h3 className="text-xl font-bold text-blue-400">{user.displayName}</h3>
@@ -266,9 +274,15 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
             {/* Opponent (Right Side) */}
             <div className="flex items-center space-x-6">
               <div className="text-right">
-                <h3 className="text-xl font-bold text-red-400">{opponentData?.displayName || 'Opponent'}</h3>
+                <h3 className="text-xl font-bold text-red-400">
+                  {opponentData?.displayName || 'Opponent'}
+                  {opponentData?.uid === 'ai_opponent' && (
+                    <span className="ml-2 px-2 py-1 bg-purple-600 text-purple-100 text-xs rounded-full">AI</span>
+                  )}
+                </h3>
                 <div className={`text-sm mb-3 ${opponentData?.isReady ? 'text-green-400' : 'text-yellow-400'}`}>
-                  {opponentData?.isReady ? '✓ Ready' : 'Selecting cards...'}
+                  {opponentData?.isReady ? '✓ Ready' : 
+                   opponentData?.uid === 'ai_opponent' ? 'AI thinking...' : 'Selecting cards...'}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center space-x-3">
@@ -293,8 +307,18 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                   </div>
                 </div>
               </div>
-              <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center border-4 border-red-400">
-                <i className="fas fa-user text-3xl"></i>
+              <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center border-4 border-red-400 overflow-hidden">
+                {opponentData?.uid === 'ai_opponent' ? (
+                  <i className="fas fa-robot text-3xl text-purple-300"></i>
+                ) : (opponentData && (opponentData as any)?.profilePicture) ? (
+                  <img 
+                    src={(opponentData as any).profilePicture} 
+                    alt={opponentData.displayName}
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                ) : (
+                  <i className="fas fa-user text-3xl"></i>
+                )}
               </div>
             </div>
           </div>
@@ -319,7 +343,12 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
           
           {/* Opponent's Battlefield */}
           <div className="mb-6">
-            <h3 className="text-sm font-bold text-red-400 mb-2">{opponentData?.displayName || 'Opponent'}'s Cards</h3>
+            <h3 className="text-sm font-bold text-red-400 mb-2">
+              {opponentData?.displayName || 'Opponent'}'s Cards
+              {opponentData?.uid === 'ai_opponent' && (
+                <span className="ml-2 px-1 py-0.5 bg-purple-600 text-purple-100 text-xs rounded">AI</span>
+              )}
+            </h3>
             <div className="flex justify-center space-x-4">
               {['left', 'center', 'right'].map((position) => {
                 const card = opponentData?.battlefield?.[position as 'left' | 'center' | 'right'];
