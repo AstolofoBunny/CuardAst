@@ -112,6 +112,7 @@ export interface Room {
   description?: string;
   battleId?: string;
   createdAt: number;
+  playersReady?: string[]; // Track which players clicked ready
 }
 
 export interface Battle {
@@ -125,10 +126,15 @@ export interface Battle {
       energy: number;
       deck: string[];
       hand: string[];
-      battlefield: string[];
+      battlefield: {
+        left: GameCard | null;
+        center: GameCard | null;
+        right: GameCard | null;
+      };
       selectedBattleCard?: string;
       selectedAbilities?: string[];
       isReady: boolean;
+      battleCardsPlayedThisRound: number;
     };
   };
   currentTurn: string;
@@ -137,7 +143,9 @@ export interface Battle {
   readyCount?: number;
   winner?: string;
   createdAt: number;
+  currentRound: number;
   history?: BattleAction[];
+  lastActivity: number;
 }
 
 export interface BattleAction {

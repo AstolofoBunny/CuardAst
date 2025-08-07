@@ -14,7 +14,10 @@ import {
   getDoc,
   setDoc,
   QuerySnapshot,
-  DocumentData
+  DocumentData,
+  increment,
+  arrayRemove,
+  arrayUnion
 } from 'firebase/firestore';
 import { db, BASE_CARDS } from '@/lib/firebase';
 import { GameCard, Room, Battle, RankingEntry, ChatMessage } from '@/types/game';
@@ -154,7 +157,8 @@ export function useFirestore() {
       const roomWithTimestamp = {
         ...roomData,
         createdAt: Date.now(),
-        lastActivity: Date.now() // Track for auto-deletion
+        lastActivity: Date.now(), // Track for auto-deletion
+        playersReady: [] // Track which players clicked ready
       };
       
       const docRef = await addDoc(collection(db, 'rooms'), roomWithTimestamp);
@@ -167,28 +171,40 @@ export function useFirestore() {
             [roomData.hostId]: {
               uid: roomData.hostId,
               displayName: roomData.hostName,
-              hp: 20,
+              hp: 50,
               energy: 100,
               deck: [], // Will be populated from user's actual deck
               hand: [],
-              battlefield: [],
-              isReady: false
+              battlefield: {
+                left: null,
+                center: null,
+                right: null
+              },
+              isReady: false,
+              battleCardsPlayedThisRound: 0
             },
             'ai_opponent': {
               uid: 'ai_opponent',
               displayName: 'AI Opponent',
-              hp: 20,
+              hp: 50,
               energy: 100,
               deck: [], // AI deck will be auto-generated
               hand: [],
-              battlefield: [],
-              isReady: true
+              battlefield: {
+                left: null,
+                center: null,
+                right: null
+              },
+              isReady: true,
+              battleCardsPlayedThisRound: 0
             }
           },
           currentTurn: roomData.hostId,
           phase: 'preparation',
           status: 'active',
-          createdAt: Date.now()
+          currentRound: 1,
+          createdAt: Date.now(),
+          lastActivity: Date.now()
         };
         
         const battleRef = await addDoc(collection(db, 'battles'), battleData);
@@ -213,7 +229,7 @@ export function useFirestore() {
     }
   };
 
-  const joinRoom = async (roomId: string, userId: string) => {
+  const joinRoom = async (roomId: string, userId: string, userName?: string) => {
     try {
       const roomRef = doc(db, 'rooms', roomId);
       const room = rooms.find(r => r.id === roomId);
@@ -223,7 +239,8 @@ export function useFirestore() {
       const updatedRoom = {
         players: updatedPlayers,
         status: updatedPlayers.length >= room.maxPlayers ? 'active' : 'waiting',
-        lastActivity: Date.now()
+        lastActivity: Date.now(),
+        playersReady: room.playersReady || [] // Preserve existing readiness
       };
 
       await updateDoc(roomRef, updatedRoom);
@@ -236,29 +253,41 @@ export function useFirestore() {
             [room.hostId]: {
               uid: room.hostId,
               displayName: room.hostName,
-              hp: 20,
+              hp: 50,
               energy: 100,
               deck: [], // Will be populated from user's actual deck
               hand: [],
-              battlefield: [],
-              isReady: false
+              battlefield: {
+                left: null,
+                center: null,
+                right: null
+              },
+              isReady: false,
+              battleCardsPlayedThisRound: 0
             },
             [userId]: {
               uid: userId,
-              displayName: 'Player 2', // Will be updated with actual name
-              hp: 20,
+              displayName: userName || 'Player 2', // Use actual name if provided
+              hp: 50,
               energy: 100,
               deck: [],
               hand: [],
-              battlefield: [],
-              isReady: false
+              battlefield: {
+                left: null,
+                center: null,
+                right: null
+              },
+              isReady: false,
+              battleCardsPlayedThisRound: 0
             }
           },
           currentTurn: room.hostId,
           phase: 'preparation',
           status: 'waiting_for_ready', // Players need to click "Start Battle"
           readyCount: 0,
-          createdAt: Date.now()
+          currentRound: 1,
+          createdAt: Date.now(),
+          lastActivity: Date.now()
         };
         
         const battleRef = await addDoc(collection(db, 'battles'), battleData);
@@ -562,6 +591,168 @@ export function useFirestore() {
     return { hand, remainingDeck };
   };
 
+  // Get user data by ID
+  const getUserById = async (userId: string) => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (userDoc.exists()) {
+        return { uid: userId, ...userDoc.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting user by ID:', error);
+      return null;
+    }
+  };
+
+  // Battle action functions for server-side battle state
+  const placeBattleCardInBattle = async (battleId: string, playerId: string, cardId: string, position: 'left' | 'center' | 'right', cardData: GameCard) => {
+    try {
+      const battleRef = doc(db, 'battles', battleId);
+      await updateDoc(battleRef, {
+        [`players.${playerId}.battlefield.${position}`]: cardData,
+        [`players.${playerId}.energy`]: increment(-20),
+        [`players.${playerId}.battleCardsPlayedThisRound`]: increment(1),
+        [`players.${playerId}.hand`]: arrayRemove(cardId),
+        lastActivity: Date.now()
+      });
+      return true;
+    } catch (error) {
+      console.error('Error placing battle card:', error);
+      return false;
+    }
+  };
+
+  const useMagicCardInBattle = async (battleId: string, playerId: string, cardId: string, energyCost: number) => {
+    try {
+      const battleRef = doc(db, 'battles', battleId);
+      await updateDoc(battleRef, {
+        [`players.${playerId}.energy`]: increment(-energyCost),
+        [`players.${playerId}.hand`]: arrayRemove(cardId),
+        [`players.${playerId}.deck`]: arrayUnion(cardId),
+        lastActivity: Date.now()
+      });
+      return true;
+    } catch (error) {
+      console.error('Error using magic card:', error);
+      return false;
+    }
+  };
+
+  const drawCardInBattle = async (battleId: string, playerId: string, deckArray: string[]) => {
+    try {
+      if (deckArray.length === 0) return false;
+      
+      const topCard = deckArray[0];
+      const newDeck = deckArray.slice(1);
+      
+      const battleRef = doc(db, 'battles', battleId);
+      await updateDoc(battleRef, {
+        [`players.${playerId}.hand`]: arrayUnion(topCard),
+        [`players.${playerId}.deck`]: newDeck,
+        [`players.${playerId}.energy`]: increment(-5),
+        lastActivity: Date.now()
+      });
+      return true;
+    } catch (error) {
+      console.error('Error drawing card:', error);
+      return false;
+    }
+  };
+
+  const endPlayerTurnInBattle = async (battleId: string, currentPlayerId: string, nextPlayerId: string, currentRound: number) => {
+    try {
+      const battleRef = doc(db, 'battles', battleId);
+      await updateDoc(battleRef, {
+        currentTurn: nextPlayerId,
+        [`players.${currentPlayerId}.energy`]: increment(15),
+        [`players.${nextPlayerId}.energy`]: increment(15),
+        [`players.${currentPlayerId}.battleCardsPlayedThisRound`]: 0,
+        [`players.${nextPlayerId}.battleCardsPlayedThisRound`]: 0,
+        currentRound: currentRound + 1,
+        lastActivity: Date.now()
+      });
+      return true;
+    } catch (error) {
+      console.error('Error ending player turn:', error);
+      return false;
+    }
+  };
+
+  const attackInBattle = async (battleId: string, attackerId: string, damage: number, targetType: 'player' | 'card', targetPlayerId?: string, targetPosition?: 'left' | 'center' | 'right') => {
+    try {
+      const battleRef = doc(db, 'battles', battleId);
+      if (targetType === 'player' && targetPlayerId) {
+        await updateDoc(battleRef, {
+          [`players.${targetPlayerId}.hp`]: increment(-damage),
+          lastActivity: Date.now()
+        });
+      } else if (targetType === 'card' && targetPlayerId && targetPosition) {
+        // For card damage, we need to get current card health first
+        // This is simplified - in a real implementation you'd need to handle this more carefully
+        await updateDoc(battleRef, {
+          [`players.${targetPlayerId}.battlefield.${targetPosition}.health`]: increment(-damage),
+          lastActivity: Date.now()
+        });
+      }
+      return true;
+    } catch (error) {
+      console.error('Error attacking in battle:', error);
+      return false;
+    }
+  };
+
+  // Mark player as ready in room
+  const markPlayerReadyInRoom = async (roomId: string, playerId: string) => {
+    try {
+      const roomRef = doc(db, 'rooms', roomId);
+      const room = rooms.find(r => r.id === roomId);
+      if (!room) throw new Error('Room not found');
+      
+      const currentReady = room.playersReady || [];
+      const isAlreadyReady = currentReady.includes(playerId);
+      
+      if (isAlreadyReady) {
+        return; // Player already ready
+      }
+      
+      const updatedReady = [...currentReady, playerId];
+      
+      await updateDoc(roomRef, {
+        playersReady: updatedReady,
+        lastActivity: Date.now()
+      });
+      
+      // Check if all players are ready and start battle
+      if (updatedReady.length >= room.players.length && room.players.length >= room.maxPlayers) {
+        if (room.type === 'pvp') {
+          // For PvP, create or update battle to active
+          if (room.battleId) {
+            const battleRef = doc(db, 'battles', room.battleId);
+            await updateDoc(battleRef, {
+              status: 'active',
+              phase: 'battle'
+            });
+          }
+          
+          await updateDoc(roomRef, {
+            status: 'active'
+          });
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error marking player ready in room:', error);
+      toast({
+        title: "Error",
+        description: "Failed to mark ready",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
   return {
     cards,
     rooms,
@@ -580,6 +771,13 @@ export function useFirestore() {
     updateUserDeck,
     createTestRooms,
     sendChatMessage,
-    distributeCards
+    distributeCards,
+    getUserById,
+    markPlayerReadyInRoom,
+    placeBattleCardInBattle,
+    useMagicCardInBattle,
+    drawCardInBattle,
+    endPlayerTurnInBattle,
+    attackInBattle
   };
 }

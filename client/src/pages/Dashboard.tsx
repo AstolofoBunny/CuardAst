@@ -15,6 +15,8 @@ import { CardsGrid } from '@/components/CardsGrid';
 import { Room, GameCard } from '@/types/game';
 import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface DashboardProps {
   user: any;
@@ -29,7 +31,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [activeTab, setActiveTab] = useState(initialTab);
   const [battleSubTab, setBattleSubTab] = useState(initialBattleSubTab || 'waiting-room');
   const [location, navigate] = useLocation();
-  const { rooms, rankings, cards, chatMessages, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms, sendChatMessage, distributeCards } = useFirestore();
+  const { rooms, rankings, cards, chatMessages, createRoom, joinRoom, deleteRoom, markPlayerReady, createTestRooms, sendChatMessage, distributeCards, getUserById, markPlayerReadyInRoom, placeBattleCardInBattle, useMagicCardInBattle, drawCardInBattle, endPlayerTurnInBattle, attackInBattle } = useFirestore();
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
   const [chatCollapsed, setChatCollapsed] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
@@ -59,6 +61,10 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
   const [selectedAttacker, setSelectedAttacker] = useState<'left' | 'center' | 'right' | null>(null);
   const [showAttackTargets, setShowAttackTargets] = useState(false);
   const [isPvE, setIsPvE] = useState(false);
+  const [playerUsers, setPlayerUsers] = useState<{[key: string]: any}>({});
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [currentBattle, setCurrentBattle] = useState<any>(null);
+  const [battleLoading, setBattleLoading] = useState(false);
 
   // Room form state
   const [roomForm, setRoomForm] = useState({
@@ -116,6 +122,82 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }
   }, [userExistingRoom, currentRoomId, user, distributeCards]);
 
+  // Fetch player user data when room changes
+  useEffect(() => {
+    const fetchPlayerUsers = async () => {
+      if (!currentRoom || !currentRoom.players) return;
+      
+      const usersData: {[key: string]: any} = {};
+      for (const playerId of currentRoom.players) {
+        if (playerId !== user?.uid) { // Don't fetch current user data
+          const userData = await getUserById(playerId);
+          if (userData) {
+            usersData[playerId] = userData;
+          }
+        }
+      }
+      setPlayerUsers(usersData);
+    };
+    
+    fetchPlayerUsers();
+  }, [currentRoom, user, getUserById]);
+
+  // Check if current player is ready
+  useEffect(() => {
+    if (currentRoom && user) {
+      const ready = currentRoom.playersReady?.includes(user.uid) || false;
+      setIsPlayerReady(ready);
+    }
+  }, [currentRoom, user]);
+
+  // Handle player ready click
+  const handlePlayerReady = async () => {
+    if (!currentRoom || !user || isPlayerReady) return;
+    
+    const success = await markPlayerReadyInRoom(currentRoom.id, user.uid);
+    if (success) {
+      setIsPlayerReady(true);
+    }
+  };
+
+  // Listen to battle changes for real-time synchronization
+  useEffect(() => {
+    if (!currentRoom?.battleId) {
+      setCurrentBattle(null);
+      return;
+    }
+
+    setBattleLoading(true);
+    const unsubscribe = onSnapshot(
+      doc(db, 'battles', currentRoom.battleId),
+      (battleDoc) => {
+        if (battleDoc.exists()) {
+          const battleData = { id: battleDoc.id, ...battleDoc.data() } as any;
+          setCurrentBattle(battleData);
+          
+          // Initialize player deck and hand if empty and user has a deck
+          const playerData = battleData.players?.[user?.uid];
+          if (user && playerData && playerData.deck?.length === 0 && user.deck && user.deck.length >= 10) {
+            const { hand, remainingDeck } = distributeCards(user.deck);
+            updateDoc(doc(db, 'battles', currentRoom.battleId), {
+              [`players.${user.uid}.deck`]: remainingDeck,
+              [`players.${user.uid}.hand`]: hand
+            });
+          }
+        }
+        setBattleLoading(false);
+      },
+      (error) => {
+        console.error('Error listening to battle:', error);
+        setBattleLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [currentRoom?.battleId, user, distributeCards]);
+
+  // Auto-navigate to fight when all players ready (will be defined after handleBattleSubTabChange)
+
   // Handle chat message send
   const handleSendMessage = async () => {
     if (!chatMessage.trim() || isGuest || !user) return;
@@ -124,78 +206,52 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     setChatMessage('');
   };
 
-  // Handle card click
+  // Handle card click - now uses server-side battle
   const handleCardClick = (cardId: string) => {
+    if (!currentBattle || !user || !currentRoom?.battleId) return;
+    
     const card = cards.find(c => c.id === cardId);
     if (!card) return;
+
+    const playerData = currentBattle.players[user.uid];
+    if (!playerData) return;
 
     if (card.type === 'battle') {
       setSelectedCard(cardId);
       setShowPlacementButtons(true);
-    } else if (card.type === 'ability' && playerEnergy >= (card.cost || 0)) {
+    } else if (card.type === 'ability' && playerData.energy >= (card.cost || 0)) {
       // Magic card confirmation
       if (window.confirm(`Use ${card.name} for ${card.cost || 0} energy?\n${card.description}`)) {
-        useMagicCard(cardId);
+        useMagicCardInBattle(currentRoom.battleId, user.uid, cardId, card.cost || 0);
       }
     }
   };
 
-  // Use magic card
-  const useMagicCard = (cardId: string) => {
-    const card = cards.find(c => c.id === cardId);
-    if (!card) return;
+  // Use magic card - now handled by server-side function in handleCardClick
 
-    const energyCost = card.cost || 10;
+  // Draw card from deck - now uses server-side battle
+  const drawCardFromDeck = async () => {
+    if (!currentBattle || !user || !currentRoom?.battleId) return;
     
-    // Check if player can afford the energy cost
-    if (playerEnergy < energyCost) {
-      console.log('Not enough energy to use ability card');
-      return;
-    }
-
-    // Deduct energy
-    setPlayerEnergy(prev => Math.max(0, prev - energyCost));
+    const playerData = currentBattle.players[user.uid];
+    if (!playerData) return;
     
-    // Remove from hand and add to end of deck
-    setPlayerHand(prev => prev.filter(id => id !== cardId));
-    setPlayerDeck(prev => [...prev, cardId]);
-
-    console.log(`${card.name} activated! Energy cost: ${energyCost}`);
-    
-    // Check if energy is 0 and auto-end turn
-    if (playerEnergy - energyCost <= 0) {
-      setTimeout(() => endPlayerTurn(), 1000);
-    }
-  };
-
-  // Draw card from deck
-  const drawCardFromDeck = () => {
-    if (!isPlayerTurn) return;
-    if (playerHand.length >= 5) {
+    if (currentBattle.currentTurn !== user.uid) return;
+    if (playerData.hand.length >= 5) {
       console.log('Hand is full, cannot draw more cards');
       return;
     }
-    if (playerDeck.length === 0) {
+    if (playerData.deck.length === 0) {
       console.log('Deck is empty, cannot draw cards');
       return;
     }
-    if (playerEnergy < 5) {
+    if (playerData.energy < 5) {
       console.log('Not enough energy to draw card');
       return;
     }
 
-    // Draw top card from deck to hand
-    const topCard = playerDeck[0];
-    setPlayerHand(prev => [...prev, topCard]);
-    setPlayerDeck(prev => prev.slice(1));
-    setPlayerEnergy(prev => Math.max(0, prev - 5));
-    
+    await drawCardInBattle(currentRoom.battleId, user.uid, playerData.deck);
     console.log('Card drawn from deck! Energy cost: 5');
-    
-    // Check if energy is 0 and auto-end turn
-    if (playerEnergy - 5 <= 0) {
-      setTimeout(() => endPlayerTurn(), 1000);
-    }
   };
 
   // Handle card attack on battlefield
@@ -275,66 +331,53 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     setShowAttackTargets(false);
   };
 
-  // Place battle card on field
-  const placeBattleCard = (position: 'left' | 'center' | 'right') => {
-    if (!selectedCard) return;
+  // Place battle card on field - now uses server-side battle
+  const placeBattleCard = async (position: 'left' | 'center' | 'right') => {
+    if (!selectedCard || !currentBattle || !user || !currentRoom?.battleId) return;
     
     const card = cards.find(c => c.id === selectedCard);
     if (!card || card.type !== 'battle') return;
 
+    const playerData = currentBattle.players[user.uid];
+    if (!playerData) return;
+
     // Check if player can afford the energy cost (20 for battle cards)
     const energyCost = 20;
-    if (playerEnergy < energyCost) {
+    if (playerData.energy < energyCost) {
       console.log('Not enough energy to place card');
       return;
     }
 
     // Check if player can place battle cards this round (max 1 per round)
-    if (battleCardsPlayedThisRound >= 1) {
+    if (playerData.battleCardsPlayedThisRound >= 1) {
       console.log('Cannot place more battle cards this round');
       return;
     }
 
+    // Check if position is empty
+    if (playerData.battlefield[position]) {
+      console.log('Position already occupied');
+      return;
+    }
+
     console.log('Placing card:', card.name, 'at position:', position);
-    console.log('Card details:', card);
 
-    // Deduct energy
-    setPlayerEnergy(prev => Math.max(0, prev - energyCost));
-    setBattleCardsPlayedThisRound(prev => prev + 1);
+    // Create card data for battlefield
+    const cardData = {
+      ...card,
+      id: card.id,
+      name: card.name,
+      attack: card.attack || 0,
+      defense: card.defense || 0, 
+      health: card.health || 1,
+      imageUrl: card.imageUrl || ''
+    };
 
-    // Update battlefield state
-    setBattlefield(prev => {
-      const newBattlefield = {
-        ...prev,
-        [position]: {
-          ...card,
-          id: card.id,
-          name: card.name,
-          attack: card.attack || 0,
-          defense: card.defense || 0, 
-          health: card.health || 1,
-          imageUrl: card.imageUrl || ''
-        }
-      };
-      console.log('New battlefield state:', newBattlefield);
-      return newBattlefield;
-    });
-
-    // Remove from hand
-    setPlayerHand(prev => {
-      const newHand = prev.filter(id => id !== selectedCard);
-      console.log('Updated hand:', newHand);
-      return newHand;
-    });
-    
-    setSelectedCard(null);
-    setShowPlacementButtons(false);
-
-    console.log(`Card ${card.name} placed successfully on ${position} field. Energy: ${playerEnergy - energyCost}`);
-    
-    // Check if energy is 0 and auto-end turn
-    if (playerEnergy - energyCost <= 0) {
-      setTimeout(() => endPlayerTurn(), 1000);
+    const success = await placeBattleCardInBattle(currentRoom.battleId, user.uid, selectedCard, position, cardData);
+    if (success) {
+      setSelectedCard(null);
+      setShowPlacementButtons(false);
+      console.log(`Card ${card.name} placed successfully on ${position} field.`);
     }
   };
 
@@ -398,24 +441,27 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     }, 2000);
   };
 
-  // End player turn function
-  const endPlayerTurn = () => {
-    if (!isPlayerTurn) return;
+  // End player turn function - now uses server-side battle
+  const endPlayerTurn = async () => {
+    if (!currentBattle || !user || !currentRoom?.battleId) return;
     
-    setIsPlayerTurn(false);
+    const playerData = currentBattle.players[user.uid];
+    if (!playerData || currentBattle.currentTurn !== user.uid) return;
+    
+    // Find next player
+    const playerIds = Object.keys(currentBattle.players);
+    const currentIndex = playerIds.indexOf(user.uid);
+    const nextIndex = (currentIndex + 1) % playerIds.length;
+    const nextPlayerId = playerIds[nextIndex];
+    
     console.log('Player turn ended');
     
-    if (isPvE) {
-      executeBotTurn();
-    } else {
-      // PvP mode - simplified enemy turn
+    await endPlayerTurnInBattle(currentRoom.battleId, user.uid, nextPlayerId, currentBattle.currentRound);
+    
+    // For PvE, handle bot turn after a delay
+    if (isPvE && nextPlayerId === 'ai_opponent') {
       setTimeout(() => {
-        setPlayerEnergy(prev => Math.min(100, prev + 15));
-        setEnemyEnergy(prev => Math.min(100, prev + 15));
-        setBattleCardsPlayedThisRound(0);
-        setCurrentRound(prev => prev + 1);
-        setIsPlayerTurn(true);
-        console.log(`Round ${currentRound + 1} started`);
+        executeBotTurn();
       }, 2000);
     }
   };
@@ -435,6 +481,21 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     setBattleSubTab(newSubTab);
     navigate(`/battle/${newSubTab}`);
   };
+
+  // Auto-navigate to fight when all players ready
+  useEffect(() => {
+    if (currentRoom && currentRoom.playersReady && currentRoom.players) {
+      const readyCount = currentRoom.playersReady.length;
+      const totalPlayers = currentRoom.players.length;
+      
+      if (readyCount >= totalPlayers && totalPlayers >= currentRoom.maxPlayers && battleSubTab === 'waiting-room') {
+        // All players ready - navigate to fight
+        setTimeout(() => {
+          handleBattleSubTabChange('fight');
+        }, 1500); // Small delay to show the 2/2 state
+      }
+    }
+  }, [currentRoom, battleSubTab]);
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -471,9 +532,13 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
         if (roomForm.type === 'pve') {
           // For PvE rooms, go directly to fight sub-tab
           setBattleSubTab('fight');
+          navigate('/battle/fight'); // Ensure URL is updated
+          setIsPvE(true); // Set PvE mode
         } else {
           // For PvP rooms, go to waiting room sub-tab to wait for opponent
           setBattleSubTab('waiting-room');
+          navigate('/battle/waiting-room');
+          setIsPvE(false);
         }
       }
     } catch (error) {
@@ -497,7 +562,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       alert('You already have a room. Leave your current room before joining a new one.');
       return;
     }
-    const success = await joinRoom(roomId, user!.uid);
+    const success = await joinRoom(roomId, user!.uid, user!.displayName);
     if (success) {
       setCurrentRoomId(roomId);
       const room = rooms.find(r => r.id === roomId);
@@ -509,9 +574,13 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
       if (room?.type === 'pve') {
         // For PvE rooms, go directly to fight sub-tab
         setBattleSubTab('fight');
+        navigate('/battle/fight'); // Ensure URL is updated
+        setIsPvE(true); // Set PvE mode
       } else {
         // For PvP rooms, go to waiting room sub-tab
         setBattleSubTab('waiting-room');
+        navigate('/battle/waiting-room');
+        setIsPvE(false);
       }
     }
   };
@@ -699,9 +768,14 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                         <i className="fas fa-user text-white text-xl"></i>
                                       </div>
                                       <h4 className="font-bold text-red-400">
-                                        {/* Show the other player's name if current user is host, otherwise show current user */}
+                                        {/* Show the actual player name */}
                                         {user && currentRoom.hostId === user.uid 
-                                          ? 'Player 2' 
+                                          ? (() => {
+                                              const otherPlayerId = currentRoom.players.find(id => id !== user.uid);
+                                              return otherPlayerId && playerUsers[otherPlayerId] 
+                                                ? playerUsers[otherPlayerId].displayName 
+                                                : 'Player 2';
+                                            })()
                                           : user?.displayName || 'You'}
                                       </h4>
                                       <p className="text-sm text-gray-400">Player</p>
@@ -720,14 +794,64 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
 
                               <div className="mt-8">
                                 {currentRoom.players && currentRoom.players.length > 1 ? (
-                                  <Button
-                                    onClick={() => handleBattleSubTabChange('fight')}
-                                    size="lg" 
-                                    className="bg-red-600 hover:bg-red-700 text-xl px-8 py-3"
-                                  >
-                                    <i className="fas fa-play mr-2"></i>
-                                    START BATTLE
-                                  </Button>
+                                  <div className="space-y-4">
+                                    {/* Readiness Counter */}
+                                    <div className="text-center">
+                                      <div className="text-2xl font-bold text-orange-400 mb-2">
+                                        Players Ready: {(currentRoom.playersReady?.length || 0)}/{currentRoom.players.length}
+                                      </div>
+                                      
+                                      {/* Individual Ready Status */}
+                                      <div className="flex justify-center space-x-4 mb-4">
+                                        {currentRoom.players.map((playerId, index) => {
+                                          const isReady = currentRoom.playersReady?.includes(playerId) || false;
+                                          const playerData = playerId === user?.uid ? user : playerUsers[playerId];
+                                          const playerName = playerData?.displayName || (playerId === currentRoom.hostId ? 'Host' : `Player ${index + 1}`);
+                                          
+                                          return (
+                                            <div key={playerId} className={`px-3 py-2 rounded-lg border-2 ${isReady ? 'bg-green-600 border-green-400 text-white' : 'bg-gray-600 border-gray-400 text-gray-300'}`}>
+                                              <div className="text-sm font-bold">
+                                                {isReady ? '✓' : '○'} {playerName}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Ready Button or Start Battle */}
+                                    {(currentRoom.playersReady?.length || 0) >= currentRoom.players.length ? (
+                                      <div className="text-center">
+                                        <div className="text-green-400 font-bold mb-2">
+                                          <i className="fas fa-check-circle mr-2"></i>
+                                          All players ready! Starting battle...
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <Button
+                                        onClick={handlePlayerReady}
+                                        disabled={isPlayerReady}
+                                        size="lg" 
+                                        className={`text-xl px-8 py-3 ${
+                                          isPlayerReady 
+                                            ? 'bg-green-600 hover:bg-green-600 cursor-default' 
+                                            : 'bg-orange-600 hover:bg-orange-700'
+                                        }`}
+                                      >
+                                        {isPlayerReady ? (
+                                          <>
+                                            <i className="fas fa-check mr-2"></i>
+                                            READY - Waiting for others...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <i className="fas fa-hand-paper mr-2"></i>
+                                            READY UP!
+                                          </>
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
                                 ) : (
                                   <div className="text-gray-400">
                                     <i className="fas fa-clock mr-2"></i>
@@ -817,16 +941,46 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                       }`}
                                       onClick={() => showAttackTargets ? executeAttack('enemy') : undefined}
                                     >
-                                      <span className="text-sm font-bold text-white">AI</span>
+                                      <span className="text-sm font-bold text-white">
+                                        {isPvE ? 'AI' : (() => {
+                                          const otherPlayerId = currentRoom?.players.find(id => id !== user?.uid);
+                                          return otherPlayerId && playerUsers[otherPlayerId] 
+                                            ? playerUsers[otherPlayerId].displayName.charAt(0) 
+                                            : '?';
+                                        })()}
+                                      </span>
                                     </div>
                                     <div className="flex flex-col space-y-1">
-                                      <div className="text-xs text-red-400 font-bold">Enemy HP: {enemyHP}/50</div>
-                                      <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-red-500 rounded-full transition-all duration-300" style={{ width: `${(enemyHP / 50) * 100}%` }}></div>
+                                      <div className="text-xs text-red-400 font-bold">
+                                        {isPvE ? 'AI' : (() => {
+                                          const otherPlayerId = currentRoom?.players.find(id => id !== user?.uid);
+                                          return otherPlayerId && playerUsers[otherPlayerId] 
+                                            ? playerUsers[otherPlayerId].displayName 
+                                            : 'Opponent';
+                                        })()} HP: {currentBattle ? (() => {
+                                          const otherPlayerId = Object.keys(currentBattle.players).find(id => id !== user?.uid);
+                                          return otherPlayerId ? currentBattle.players[otherPlayerId].hp : 50;
+                                        })() : 50}/50
                                       </div>
-                                      <div className="text-xs text-blue-400">Energy: {enemyEnergy}/100</div>
                                       <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${(enemyEnergy / 100) * 100}%` }}></div>
+                                        <div className="h-full bg-red-500 rounded-full transition-all duration-300" style={{ 
+                                          width: `${currentBattle ? (() => {
+                                            const otherPlayerId = Object.keys(currentBattle.players).find(id => id !== user?.uid);
+                                            return otherPlayerId ? (currentBattle.players[otherPlayerId].hp / 50) * 100 : 100;
+                                          })() : 100}%` 
+                                        }}></div>
+                                      </div>
+                                      <div className="text-xs text-blue-400">Energy: {currentBattle ? (() => {
+                                        const otherPlayerId = Object.keys(currentBattle.players).find(id => id !== user?.uid);
+                                        return otherPlayerId ? currentBattle.players[otherPlayerId].energy : 100;
+                                      })() : 100}/100</div>
+                                      <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ 
+                                          width: `${currentBattle ? (() => {
+                                            const otherPlayerId = Object.keys(currentBattle.players).find(id => id !== user?.uid);
+                                            return otherPlayerId ? (currentBattle.players[otherPlayerId].energy / 100) * 100 : 100;
+                                          })() : 100}%` 
+                                        }}></div>
                                       </div>
                                     </div>
                                   </div>
@@ -956,11 +1110,11 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                       <span className="text-sm font-bold text-white">{user?.displayName?.charAt(0) || 'P'}</span>
                                     </div>
                                     <div className="flex flex-col space-y-1">
-                                      <div className="text-xs text-blue-400 font-bold">Your HP: {playerHP}/50</div>
+                                      <div className="text-xs text-blue-400 font-bold">Your HP: {currentBattle && user ? currentBattle.players[user.uid]?.hp || 50 : 50}/50</div>
                                       <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
                                         <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${(playerHP / 50) * 100}%` }}></div>
                                       </div>
-                                      <div className="text-xs text-green-400">Energy: {playerEnergy}/100</div>
+                                      <div className="text-xs text-green-400">Energy: {currentBattle && user ? currentBattle.players[user.uid]?.energy || 100 : 100}/100</div>
                                       <div className="w-32 h-3 bg-gray-700 rounded-full overflow-hidden">
                                         <div className="h-full bg-green-500 rounded-full transition-all duration-300" style={{ width: `${(playerEnergy / 100) * 100}%` }}></div>
                                       </div>
