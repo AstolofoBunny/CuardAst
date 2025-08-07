@@ -131,6 +131,11 @@ export interface Battle {
         center: GameCard | null;
         right: GameCard | null;
       };
+      battlefieldAttacks: {
+        left: boolean;
+        center: boolean;
+        right: boolean;
+      };
       selectedBattleCard?: string;
       selectedAbilities?: string[];
       isReady: boolean;

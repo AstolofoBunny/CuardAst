@@ -189,6 +189,11 @@ export function useFirestore() {
                 center: null,
                 right: null
               },
+              battlefieldAttacks: {
+                left: false,
+                center: false,
+                right: false
+              },
               isReady: false,
               battleCardsPlayedThisRound: 0
             },
@@ -203,6 +208,11 @@ export function useFirestore() {
                 left: null,
                 center: null,
                 right: null
+              },
+              battlefieldAttacks: {
+                left: false,
+                center: false,
+                right: false
               },
               isReady: true,
               battleCardsPlayedThisRound: 0
@@ -273,6 +283,11 @@ export function useFirestore() {
                 center: null,
                 right: null
               },
+              battlefieldAttacks: {
+                left: false,
+                center: false,
+                right: false
+              },
               isReady: false,
               battleCardsPlayedThisRound: 0
             },
@@ -287,6 +302,11 @@ export function useFirestore() {
                 left: null,
                 center: null,
                 right: null
+              },
+              battlefieldAttacks: {
+                left: false,
+                center: false,
+                right: false
               },
               isReady: false,
               battleCardsPlayedThisRound: 0
@@ -658,7 +678,45 @@ export function useFirestore() {
         }
       }
 
-      // AI Strategy: Place battle cards if has energy and cards in hand
+      // AI Strategy: First check for attacks (Round 2+)
+      if ((battle.currentRound || 1) >= 2) {
+        // Check for cards that can attack
+        const positions: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
+        const attackablePositions = positions.filter(pos => {
+          const card = aiPlayer.battlefield[pos];
+          const hasAttacked = aiPlayer.battlefieldAttacks?.[pos];
+          return card && !hasAttacked; // Card exists and hasn't attacked yet
+        });
+
+        if (attackablePositions.length > 0) {
+          // Choose random attacking card
+          const attackPos = attackablePositions[Math.floor(Math.random() * attackablePositions.length)];
+          
+          // Find opponent
+          const humanPlayerId = Object.keys(battle.players).find(id => id !== aiPlayerId);
+          const humanPlayer = humanPlayerId ? battle.players[humanPlayerId] : null;
+          
+          if (humanPlayer) {
+            // Strategy: Attack enemy cards first, then player if path is clear
+            const enemyCardPositions = positions.filter(pos => humanPlayer.battlefield[pos]);
+            
+            if (enemyCardPositions.length > 0) {
+              // Attack random enemy card
+              const targetPos = enemyCardPositions[Math.floor(Math.random() * enemyCardPositions.length)];
+              console.log(`AI attacking enemy card at ${targetPos} with card from ${attackPos}`);
+              await attackInBattle(battleId, aiPlayerId, attackPos, targetPos);
+              return;
+            } else {
+              // No enemy cards, try to attack player directly
+              console.log(`AI attacking enemy player with card from ${attackPos}`);
+              await attackInBattle(battleId, aiPlayerId, attackPos, 'enemy');
+              return;
+            }
+          }
+        }
+      }
+
+      // If can't attack, try to place battle cards
       if (aiPlayer.energy >= 20 && aiPlayer.hand.length > 0) {
         // Find empty position
         const positions: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
@@ -823,18 +881,24 @@ export function useFirestore() {
           [`players.${currentPlayerId}.battleCardsPlayedThisRound`]: 0,
           [`players.${nextPlayerId}.battleCardsPlayedThisRound`]: 0,
           currentRound: currentRound + 1,
-          // Give energy to all players when round advances
+          // Reset attack counters for all players
           ...playerIds.reduce((acc, playerId) => {
             acc[`players.${playerId}.energy`] = increment(15);
+            acc[`players.${playerId}.battlefieldAttacks.left`] = false;
+            acc[`players.${playerId}.battlefieldAttacks.center`] = false;
+            acc[`players.${playerId}.battlefieldAttacks.right`] = false;
             return acc;
           }, {} as any),
           lastActivity: Date.now()
         });
       } else {
-        // Not last player - just switch turns, no energy or round change
+        // Not last player - just switch turns, reset current player's attacks
         await updateDoc(battleRef, {
           currentTurn: nextPlayerId,
           [`players.${currentPlayerId}.battleCardsPlayedThisRound`]: 0,
+          [`players.${currentPlayerId}.battlefieldAttacks.left`]: false,
+          [`players.${currentPlayerId}.battlefieldAttacks.center`]: false,
+          [`players.${currentPlayerId}.battlefieldAttacks.right`]: false,
           lastActivity: Date.now()
         });
       }
@@ -845,22 +909,134 @@ export function useFirestore() {
     }
   };
 
-  const attackInBattle = async (battleId: string, attackerId: string, damage: number, targetType: 'player' | 'card', targetPlayerId?: string, targetPosition?: 'left' | 'center' | 'right') => {
+  // Calculate damage with full formula
+  const calculateDamage = (attackingCard: GameCard, defendingCard?: GameCard): number => {
+    let baseDamage = attackingCard.attack || 1;
+    
+    // Critical hit calculation
+    const critChance = attackingCard.criticalChance || 0;
+    const isCritical = Math.random() * 100 < critChance;
+    
+    if (isCritical && attackingCard.criticalDamage) {
+      baseDamage = baseDamage * (1 + attackingCard.criticalDamage / 100);
+      console.log(`Critical hit! Base damage ${attackingCard.attack} -> ${baseDamage}`);
+    }
+    
+    // If attacking player directly, only base damage
+    if (!defendingCard) {
+      return Math.floor(baseDamage);
+    }
+    
+    // Card vs card - apply defense and resistance
+    const defense = defendingCard.defense || 0;
+    
+    // Apply resistance based on attack type
+    let resistancePercent = 0;
+    if (attackingCard.class === 'mage' && defendingCard.magicResistance) {
+      resistancePercent = defendingCard.magicResistance;
+    } else if (attackingCard.class === 'ranged' && defendingCard.rangedResistance) {
+      resistancePercent = defendingCard.rangedResistance;
+    } else if (attackingCard.class === 'melee' && defendingCard.meleeResistance) {
+      resistancePercent = defendingCard.meleeResistance;
+    }
+    
+    // Formula: (damage + crit%) - (defense + resistance%)
+    const resistanceReduction = baseDamage * (resistancePercent / 100);
+    const finalDamage = Math.max(1, baseDamage - defense - resistanceReduction);
+    
+    console.log(`Damage calculation: ${baseDamage} base - ${defense} defense - ${resistanceReduction.toFixed(1)} resistance = ${finalDamage}`);
+    return Math.floor(finalDamage);
+  };
+
+  const attackInBattle = async (battleId: string, attackerId: string, attackerPosition: 'left' | 'center' | 'right', target: 'enemy' | 'left' | 'center' | 'right'): Promise<boolean> => {
     try {
       const battleRef = doc(db, 'battles', battleId);
-      if (targetType === 'player' && targetPlayerId) {
-        await updateDoc(battleRef, {
-          [`players.${targetPlayerId}.hp`]: increment(-damage),
-          lastActivity: Date.now()
-        });
-      } else if (targetType === 'card' && targetPlayerId && targetPosition) {
-        // For card damage, we need to get current card health first
-        // This is simplified - in a real implementation you'd need to handle this more carefully
-        await updateDoc(battleRef, {
-          [`players.${targetPlayerId}.battlefield.${targetPosition}.health`]: increment(-damage),
-          lastActivity: Date.now()
-        });
+      const battleDoc = await getDoc(battleRef);
+      if (!battleDoc.exists()) return false;
+      
+      const battle = battleDoc.data() as Battle;
+      const attacker = battle.players[attackerId];
+      
+      if (!attacker || battle.currentTurn !== attackerId) {
+        console.log('Not attacker\'s turn or invalid attacker');
+        return false;
       }
+      
+      const attackingCard = attacker.battlefield[attackerPosition];
+      if (!attackingCard) {
+        console.log('No attacking card found');
+        return false;
+      }
+      
+      // Check if card already attacked this turn
+      if (attacker.battlefieldAttacks && attacker.battlefieldAttacks[attackerPosition]) {
+        console.log('Card already attacked this turn');
+        return false;
+      }
+      
+      const otherPlayerId = Object.keys(battle.players).find(id => id !== attackerId);
+      if (!otherPlayerId) return false;
+      
+      const defender = battle.players[otherPlayerId];
+      const updates: any = {};
+      
+      if (target === 'enemy') {
+        // Check if path is blocked by enemy cards
+        const pathBlocked = (() => {
+          if (attackerPosition === 'left') return defender.battlefield.left;
+          if (attackerPosition === 'center') return defender.battlefield.center;
+          if (attackerPosition === 'right') return defender.battlefield.right;
+          return false;
+        })();
+        
+        if (pathBlocked) {
+          console.log('Path blocked by enemy card, cannot attack player directly');
+          return false;
+        }
+        
+        // Direct player attack - only base damage
+        const damage = calculateDamage(attackingCard);
+        const newHP = Math.max(0, defender.hp - damage);
+        
+        updates[`players.${otherPlayerId}.hp`] = newHP;
+        console.log(`Player attacked for ${damage} damage, HP: ${defender.hp} -> ${newHP}`);
+        
+        // Check for victory
+        if (newHP <= 0) {
+          updates.status = 'finished';
+          updates.winner = attackerId;
+          updates.phase = 'finished';
+        }
+      } else {
+        // Card vs card attack
+        const defendingCard = defender.battlefield[target];
+        if (!defendingCard) {
+          console.log('No defending card found');
+          return false;
+        }
+        
+        const damage = calculateDamage(attackingCard, defendingCard);
+        const currentHealth = defendingCard.health || 1;
+        const newHealth = Math.max(0, currentHealth - damage);
+        
+        if (newHealth <= 0) {
+          // Card dies - return to end of deck
+          updates[`players.${otherPlayerId}.battlefield.${target}`] = null;
+          const newDeck = [...defender.deck, defendingCard.id];
+          updates[`players.${otherPlayerId}.deck`] = newDeck;
+          console.log(`Card ${defendingCard.name} destroyed, returned to deck`);
+        } else {
+          // Update card health
+          updates[`players.${otherPlayerId}.battlefield.${target}.health`] = newHealth;
+          console.log(`Card ${defendingCard.name} damaged: ${defendingCard.health} -> ${newHealth}`);
+        }
+      }
+      
+      // Mark card as having attacked this turn
+      updates[`players.${attackerId}.battlefieldAttacks.${attackerPosition}`] = true;
+      updates.lastActivity = Date.now();
+      
+      await updateDoc(battleRef, updates);
       return true;
     } catch (error) {
       console.error('Error attacking in battle:', error);

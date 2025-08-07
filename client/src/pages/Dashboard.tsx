@@ -298,19 +298,8 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
     const damage = attackerCard.attack || 0;
     console.log(`${attackerCard.name} attacking ${target} for ${damage} damage`);
 
-    if (target === 'enemy') {
-      // Attack enemy player directly
-      const otherPlayerId = Object.keys(currentBattle.players).find(id => id !== user.uid);
-      if (otherPlayerId) {
-        await attackInBattle(currentRoom.battleId, user.uid, damage, 'player', otherPlayerId);
-      }
-    } else {
-      // Attack enemy card
-      const otherPlayerId = Object.keys(currentBattle.players).find(id => id !== user.uid);
-      if (otherPlayerId) {
-        await attackInBattle(currentRoom.battleId, user.uid, damage, 'card', otherPlayerId, target);
-      }
-    }
+    // Use the new attack system with position tracking
+    await attackInBattle(currentRoom.battleId, user.uid, selectedAttacker, target);
 
     setSelectedAttacker(null);
     setShowAttackTargets(false);
@@ -1063,11 +1052,17 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                         className={`w-24 h-32 rounded border-2 flex items-center justify-center relative overflow-hidden cursor-pointer transition-all ${
                                           placedCard 
                                             ? ((currentBattle?.currentRound || 1) >= 2 && currentBattle?.currentTurn === user?.uid) 
-                                              ? 'bg-blue-600 border-blue-400 hover:border-yellow-400 hover:bg-blue-500' 
+                                              ? currentBattle?.players?.[user?.uid]?.battlefieldAttacks?.[position]
+                                                ? 'bg-gray-600 border-gray-400 cursor-not-allowed' // Card already attacked
+                                                : 'bg-blue-600 border-blue-400 hover:border-yellow-400 hover:bg-blue-500' 
                                               : 'bg-blue-600 border-blue-400'
                                             : 'bg-blue-600 border-blue-400'
                                         }`}
-                                        onClick={() => placedCard && (currentBattle?.currentRound || 1) >= 2 ? handleAttackClick(position) : undefined}
+                                        onClick={() => {
+                                          if (!placedCard || (currentBattle?.currentRound || 1) < 2) return;
+                                          if (currentBattle?.players?.[user?.uid]?.battlefieldAttacks?.[position]) return; // Already attacked
+                                          handleAttackClick(position);
+                                        }}
                                       >
                                         {placedCard ? (
                                           <div className="w-full h-full relative">
@@ -1100,6 +1095,13 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                                             {/* Attack indicator */}
                                             {(currentBattle?.currentRound || 1) >= 2 && currentBattle?.currentTurn === user?.uid && (
                                               <div className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                                            )}
+                                            
+                                            {/* Already attacked indicator */}
+                                            {currentBattle?.players?.[user?.uid]?.battlefieldAttacks?.[position] && (
+                                              <div className="absolute top-1 left-1 bg-gray-700 bg-opacity-90 rounded px-1 py-0.5 text-xs text-gray-300">
+                                                ⚡Used
+                                              </div>
                                             )}
                                           </div>
                                         ) : (
