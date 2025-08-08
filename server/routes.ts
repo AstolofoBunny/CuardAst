@@ -1,15 +1,165 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { insertUserSchema, insertCardSchema, insertRoomSchema } from "@shared/schema";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+  // User routes
+  app.get("/api/users", async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  app.get("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/users", async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse(req.body);
+      const user = await storage.createUser(userData);
+      res.status(201).json(user);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid user data", errors: error.errors });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.updateUserProfile(req.params.id, req.body);
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Card routes
+  app.get("/api/cards", async (req, res) => {
+    try {
+      const cards = await storage.getAllCards();
+      res.json(cards);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cards/:id", async (req, res) => {
+    try {
+      const card = await storage.getCard(req.params.id);
+      if (!card) {
+        return res.status(404).json({ message: "Card not found" });
+      }
+      res.json(card);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cards", async (req, res) => {
+    try {
+      const cardData = insertCardSchema.parse(req.body);
+      const card = await storage.createCard(cardData);
+      res.status(201).json(card);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid card data", errors: error.errors });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/cards/:id", async (req, res) => {
+    try {
+      const card = await storage.updateCard(req.params.id, req.body);
+      res.json(card);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/cards/:id", async (req, res) => {
+    try {
+      await storage.deleteCard(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Room routes
+  app.get("/api/rooms", async (req, res) => {
+    try {
+      const rooms = await storage.getAllRooms();
+      res.json(rooms);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/rooms/:id", async (req, res) => {
+    try {
+      const room = await storage.getRoom(req.params.id);
+      if (!room) {
+        return res.status(404).json({ message: "Room not found" });
+      }
+      res.json(room);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/rooms", async (req, res) => {
+    try {
+      const roomData = insertRoomSchema.parse(req.body);
+      const room = await storage.createRoom(roomData);
+      res.status(201).json(room);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid room data", errors: error.errors });
+      }
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/rooms/:id", async (req, res) => {
+    try {
+      const room = await storage.updateRoom(req.params.id, req.body);
+      res.json(room);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/rooms/:id", async (req, res) => {
+    try {
+      await storage.deleteRoom(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Health check route
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
 
   const httpServer = createServer(app);
-
   return httpServer;
 }

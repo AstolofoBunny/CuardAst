@@ -1,28 +1,7 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { storage } from "./storage";
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-// Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app);
-
-// Initialize Cloud Firestore and get a reference to the service
-export const db = getFirestore(app);
-
-// Base card set that will be created on app initialization
-export const BASE_CARDS = [
+// Base cards from the original Firebase configuration
+const BASE_CARDS = [
   {
     id: 'fire-knight',
     name: 'Fire Knight',
@@ -165,4 +144,30 @@ export const BASE_CARDS = [
   }
 ];
 
-export default app;
+export async function initializeDatabase() {
+  console.log("Initializing database with base cards...");
+  
+  try {
+    // Check if cards already exist
+    const existingCards = await storage.getAllCards();
+    if (existingCards.length > 0) {
+      console.log("Base cards already exist, skipping initialization");
+      return;
+    }
+
+    // Insert all base cards
+    for (const cardData of BASE_CARDS) {
+      try {
+        await storage.createCard(cardData as any);
+        console.log(`✓ Created card: ${cardData.name}`);
+      } catch (error: any) {
+        console.log(`⚠ Card ${cardData.name} might already exist: ${error.message}`);
+      }
+    }
+
+    console.log("✅ Database initialization completed successfully!");
+  } catch (error: any) {
+    console.error("❌ Error initializing database:", error.message);
+    throw error;
+  }
+}
