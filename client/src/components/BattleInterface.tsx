@@ -153,21 +153,24 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
       damage = Math.max(0, damage - (targetCard.defense || 0));
 
       // Initialize or update card health tracking in battle state
-      const cardHealths = updatedBattle.cardHealths || {};
-      const currentHealth = cardHealths[targetCardId] !== undefined ? cardHealths[targetCardId] : (targetCard.health || 0);
-      const newHealth = Math.max(0, currentHealth - damage);
-      
-      updatedBattle.cardHealths = {
-        ...cardHealths,
-        [targetCardId]: newHealth
-      };
+      let newHealth = targetCard.health || 0;
+      if (targetCardId) {
+        const cardHealths = updatedBattle.cardHealths || {};
+        const currentHealth = cardHealths[targetCardId] !== undefined ? cardHealths[targetCardId] : (targetCard.health || 0);
+        newHealth = Math.max(0, currentHealth - damage);
+        
+        updatedBattle.cardHealths = {
+          ...cardHealths,
+          [targetCardId]: newHealth
+        };
 
-      // Remove destroyed card if health <= 0
-      if (newHealth <= 0) {
-        updatedBattle.players[opponentId].battlefield[targetPosition as 'left' | 'center' | 'right'] = null;
-        // Remove from health tracking when destroyed
-        if (updatedBattle.cardHealths) {
-          delete updatedBattle.cardHealths[targetCardId];
+        // Remove destroyed card if health <= 0
+        if (newHealth <= 0) {
+          updatedBattle.players[opponentId].battlefield[targetPosition as 'left' | 'center' | 'right'] = null;
+          // Remove from health tracking when destroyed
+          if (updatedBattle.cardHealths) {
+            delete updatedBattle.cardHealths[targetCardId];
+          }
         }
       }
 
@@ -521,6 +524,67 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Player's Spell Deck - Right of avatar */}
+                  <div className="ml-8">
+                    <h4 className="text-sm font-bold text-purple-400 mb-2">
+                      <i className="fas fa-magic mr-1"></i>
+                      Spells
+                    </h4>
+                    <div className="flex space-x-2">
+                      {Array.from({ length: 3 }).map((_, index) => {
+                        const spellCard = cardCollections.playerSpellCards[index];
+                        const cooldowns = playerData.spellCooldowns || {};
+                        const cooldown = spellCard ? cooldowns[spellCard.id] || 0 : 0;
+                        const canUse = spellCard && playerData.energy >= (spellCard.cost || 0) && cooldown <= 0;
+                        
+                        return (
+                          <Tooltip key={index}>
+                            <TooltipTrigger asChild>
+                              <div 
+                                className={`w-12 h-16 border-2 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 ${
+                                  canUse ? 'border-purple-500 hover:border-purple-300 hover:bg-purple-900 bg-gray-700' :
+                                  spellCard ? 'border-gray-600 bg-gray-700 opacity-50' : 'border-purple-500 bg-gray-700'
+                                }`}
+                                onClick={() => {
+                                  if (canUse && spellCard) {
+                                    handleUseSpell(spellCard.id);
+                                  }
+                                }}
+                              >
+                                {spellCard ? (
+                                  <div className="text-center p-1">
+                                    <div className="text-xs font-bold text-purple-300 truncate">{spellCard.name.substring(0, 4)}</div>
+                                    <div className="text-xs text-yellow-400">⚡{spellCard.cost}</div>
+                                    {cooldown > 0 && (
+                                      <div className="text-xs text-red-400">{cooldown}⌛</div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-500 text-xs">—</span>
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {spellCard ? (
+                                <div className="p-2">
+                                  <p className="font-bold">{spellCard.name}</p>
+                                  <p className="text-sm">{spellCard.description}</p>
+                                  <div className="text-xs mt-2">
+                                    <div>Energy Cost: {spellCard.cost || 0}</div>
+                                    <div>Type: {spellCard.spellType}</div>
+                                    {cooldown > 0 && <div className="text-red-400">Cooldown: {cooldown} rounds</div>}
+                                  </div>
+                                </div>
+                              ) : (
+                                <p>Empty spell slot</p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
                 {/* VS in center */}
@@ -587,100 +651,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
               </div>
             )}
 
-            {/* Spell Decks Display */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              {/* Opponent's Spell Deck */}
-              <div className="bg-gray-800 border border-red-600 rounded-lg p-4">
-                <h3 className="text-lg font-bold text-red-400 mb-3">
-                  <i className="fas fa-magic mr-2"></i>
-                  {opponentData?.displayName || 'Opponent'}'s Spells
-                  {opponentData?.uid === 'ai_opponent' && (
-                    <span className="ml-2 px-1 py-0.5 bg-purple-600 text-purple-100 text-xs rounded">AI</span>
-                  )}
-                </h3>
-                <div className="flex space-x-2">
-                  {Array.from({ length: 3 }).map((_, index) => {
-                    const spellCard = cardCollections.opponentSpellCards[index];
-                    return (
-                      <div 
-                        key={index}
-                        className="w-16 h-20 border-2 border-red-500 bg-gray-700 rounded-lg flex items-center justify-center"
-                      >
-                        {spellCard ? (
-                          <div className="text-center p-1">
-                            <div className="text-xs font-bold text-red-300 truncate">{spellCard.name}</div>
-                            <div className="text-xs text-yellow-400">⚡{spellCard.cost}</div>
-                          </div>
-                        ) : (
-                          <span className="text-gray-500 text-xs">Empty</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* Player's Spell Deck */}
-              <div className="bg-gray-800 border border-blue-600 rounded-lg p-4">
-                <h3 className="text-lg font-bold text-blue-400 mb-3">
-                  <i className="fas fa-magic mr-2"></i>
-                  Your Spells
-                </h3>
-                <div className="flex space-x-2">
-                  {Array.from({ length: 3 }).map((_, index) => {
-                    const spellCard = cardCollections.playerSpellCards[index];
-                    const cooldowns = playerData.spellCooldowns || {};
-                    const cooldown = spellCard ? cooldowns[spellCard.id] || 0 : 0;
-                    const canUse = spellCard && playerData.energy >= (spellCard.cost || 0) && cooldown <= 0;
-                    
-                    return (
-                      <Tooltip key={index}>
-                        <TooltipTrigger asChild>
-                          <div 
-                            className={`w-16 h-20 border-2 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 ${
-                              canUse ? 'border-blue-500 hover:border-blue-300 hover:bg-blue-900 bg-gray-700' :
-                              spellCard ? 'border-gray-600 bg-gray-700 opacity-50' : 'border-blue-500 bg-gray-700'
-                            }`}
-                            onClick={() => {
-                              if (canUse && spellCard) {
-                                handleUseSpell(spellCard.id);
-                              }
-                            }}
-                          >
-                            {spellCard ? (
-                              <div className="text-center p-1">
-                                <div className="text-xs font-bold text-blue-300 truncate">{spellCard.name}</div>
-                                <div className="text-xs text-yellow-400">⚡{spellCard.cost}</div>
-                                {cooldown > 0 && (
-                                  <div className="text-xs text-red-400">{cooldown}⌛</div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-gray-500 text-xs">Empty</span>
-                            )}
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {spellCard ? (
-                            <div className="p-2">
-                              <p className="font-bold">{spellCard.name}</p>
-                              <p className="text-sm">{spellCard.description}</p>
-                              <div className="text-xs mt-2">
-                                <div>Energy Cost: {spellCard.cost || 0}</div>
-                                <div>Type: {spellCard.spellType}</div>
-                                {cooldown > 0 && <div className="text-red-400">Cooldown: {cooldown} rounds</div>}
-                              </div>
-                            </div>
-                          ) : (
-                            <p>Empty spell slot</p>
-                          )}
-                        </TooltipContent>
-                      </Tooltip>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
 
             {/* Battlefield Display with Attack System */}
             <div className="bg-gray-800 border border-purple-600 rounded-lg p-6 mb-6">
