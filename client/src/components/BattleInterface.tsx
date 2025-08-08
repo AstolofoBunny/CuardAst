@@ -111,8 +111,8 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
     
     const allBattleCards = cards.filter(card => card.type === 'battle');
     const allAbilityCards = cards.filter(card => card.type === 'ability');
-    const playerBattleCards = allBattleCards.filter(card => playerHand.includes(card.id));
-    const playerAbilityCards = allAbilityCards.filter(card => playerHand.includes(card.id));
+    const playerBattleCards = allBattleCards.filter(card => playerHand.includes(card.id)).slice(0, 5);
+    const playerAbilityCards = allAbilityCards.filter(card => playerHand.includes(card.id)).slice(0, 5);
     const playerSpellCards = allAbilityCards.filter(card => playerSpellDeck.includes(card.id));
     const opponentSpellCards = allAbilityCards.filter(card => opponentSpellDeck.includes(card.id));
 
@@ -122,83 +122,108 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
   // Action handlers with optimized Firebase updates
   const handleAttack = useCallback(async (attackerCardId: string, targetPosition: string) => {
     if (!battle || !user || !updateBattle) return;
+    
+    console.log('Attack initiated:', { attackerCardId, targetPosition });
 
     const playerData = battle.players[user.uid];
     const opponentId = Object.keys(battle.players).find(id => id !== user.uid);
     
-    if (!playerData || !opponentId || !battle.players[opponentId]) return;
+    if (!playerData || !opponentId || !battle.players[opponentId]) {
+      console.log('Invalid player or opponent data');
+      return;
+    }
 
     const attackerCard = cards.find(c => c.id === attackerCardId);
     const targetCardId = battle.players[opponentId].battlefield[targetPosition as 'left' | 'center' | 'right'];
     const targetCard = targetCardId ? cards.find(c => c.id === targetCardId) : null;
 
-    if (!attackerCard) return;
+    if (!attackerCard) {
+      console.log('Attacker card not found');
+      return;
+    }
 
-    let damage = attackerCard.attack || 0;
-    let updatedBattle = { ...battle };
+    console.log('Attack details:', { attackerCard: attackerCard.name, targetCard: targetCard?.name });
 
-    if (targetCard) {
-      // Calculate damage with resistances and critical hits
-      const isCritical = Math.random() * 100 < (attackerCard.criticalChance || 0);
-      if (isCritical) {
-        damage = Math.round(damage * ((attackerCard.criticalDamage || 150) / 100));
-      }
+    try {
+      let damage = attackerCard.attack || 0;
+      let updatedBattle = JSON.parse(JSON.stringify(battle)); // Deep copy
 
-      // Apply class-based resistances
-      const resistance = attackerCard.class === 'ranged' ? (targetCard.rangedResistance || 0) :
-                        attackerCard.class === 'melee' ? (targetCard.meleeResistance || 0) :
-                        (targetCard.magicResistance || 0);
-      
-      damage = Math.max(0, damage - Math.round(damage * resistance / 100));
-      damage = Math.max(0, damage - (targetCard.defense || 0));
+      if (targetCard && targetCardId) {
+        // Calculate damage with resistances and critical hits
+        const isCritical = Math.random() * 100 < (attackerCard.criticalChance || 0);
+        if (isCritical) {
+          damage = Math.round(damage * ((attackerCard.criticalDamage || 150) / 100));
+        }
 
-      // Initialize or update card health tracking in battle state
-      let newHealth = targetCard.health || 0;
-      if (targetCardId) {
-        const cardHealths = updatedBattle.cardHealths || {};
-        const currentHealth = cardHealths[targetCardId] !== undefined ? cardHealths[targetCardId] : (targetCard.health || 0);
-        newHealth = Math.max(0, currentHealth - damage);
+        // Apply class-based resistances
+        const resistance = attackerCard.class === 'ranged' ? (targetCard.rangedResistance || 0) :
+                          attackerCard.class === 'melee' ? (targetCard.meleeResistance || 0) :
+                          (targetCard.magicResistance || 0);
         
-        updatedBattle.cardHealths = {
-          ...cardHealths,
-          [targetCardId]: newHealth
-        };
+        damage = Math.max(0, damage - Math.round(damage * resistance / 100));
+        damage = Math.max(0, damage - (targetCard.defense || 0));
+
+        // Initialize or update card health tracking
+        if (!updatedBattle.cardHealths) {
+          updatedBattle.cardHealths = {};
+        }
+        
+        const currentHealth = updatedBattle.cardHealths[targetCardId] !== undefined ? 
+          updatedBattle.cardHealths[targetCardId] : targetCard.health || 0;
+        const newHealth = Math.max(0, currentHealth - damage);
+        
+        updatedBattle.cardHealths[targetCardId] = newHealth;
+
+        console.log('Damage calculation:', { damage, currentHealth, newHealth });
 
         // Remove destroyed card if health <= 0
         if (newHealth <= 0) {
           updatedBattle.players[opponentId].battlefield[targetPosition as 'left' | 'center' | 'right'] = null;
-          // Remove from health tracking when destroyed
-          if (updatedBattle.cardHealths) {
-            delete updatedBattle.cardHealths[targetCardId];
-          }
+          delete updatedBattle.cardHealths[targetCardId];
+          console.log('Card destroyed:', targetCard.name);
         }
+
+        toast({
+          title: isCritical ? "Critical Hit!" : "Attack Successful",
+          description: `${attackerCard.name} dealt ${damage} damage to ${targetCard.name}${newHealth <= 0 ? ' (Destroyed!)' : ` (${newHealth}/${targetCard.health} HP)`}`,
+          variant: "default"
+        });
+      } else {
+        // Direct attack to player
+        updatedBattle.players[opponentId].hp = Math.max(0, battle.players[opponentId].hp - damage);
+        
+        console.log('Direct attack:', { damage, newHP: updatedBattle.players[opponentId].hp });
+        
+        toast({
+          title: "Direct Attack!",
+          description: `${attackerCard.name} dealt ${damage} damage to opponent`,
+        });
       }
 
-      toast({
-        title: isCritical ? "Critical Hit!" : "Attack Successful",
-        description: `${attackerCard.name} dealt ${damage} damage to ${targetCard.name}${newHealth <= 0 ? ' (Destroyed!)' : ` (${newHealth}/${targetCard.health} HP)`}`,
-        variant: isCritical ? "default" : "default"
-      });
-    } else {
-      // Direct attack to player
-      updatedBattle.players[opponentId].hp = Math.max(0, battle.players[opponentId].hp - damage);
+      // Mark attacker as used
+      const playerData = battle.players[user.uid];
+      const attackerPosition = playerData.battlefield.left === attackerCardId ? 'left' :
+                               playerData.battlefield.center === attackerCardId ? 'center' : 'right';
+      if (!updatedBattle.players[user.uid].battlefieldAttacks) {
+        updatedBattle.players[user.uid].battlefieldAttacks = { left: false, center: false, right: false };
+      }
+      updatedBattle.players[user.uid].battlefieldAttacks[attackerPosition] = true;
+
+      console.log('Updating battle state...');
+      await updateBattle(battleId, updatedBattle);
       
+      setSelectedAttackCard('');
+      setSelectedTarget('');
+      
+      console.log('Attack completed successfully');
+    } catch (error) {
+      console.error('Error during attack:', error);
       toast({
-        title: "Direct Attack!",
-        description: `${attackerCard.name} dealt ${damage} damage to opponent`,
+        title: "Attack Failed",
+        description: "Something went wrong during the attack",
+        variant: "destructive"
       });
     }
-
-    // Mark attacker as used
-    const attackerPosition = getCardPosition(attackerCardId);
-    updatedBattle.players[user.uid].battlefieldAttacks = {
-      ...playerData.battlefieldAttacks,
-      [attackerPosition]: true
-    };
-
-    await updateBattle(battleId, updatedBattle);
-    setSelectedAttackCard('');
-    setSelectedTarget('');
   }, [battle, user, cards, updateBattle, battleId, toast]);
 
   const getCardPosition = useCallback((cardId: string): 'left' | 'center' | 'right' => {
@@ -525,66 +550,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                     </div>
                   </div>
                   
-                  {/* Player's Spell Deck - Right of avatar */}
-                  <div className="ml-8">
-                    <h4 className="text-sm font-bold text-purple-400 mb-2">
-                      <i className="fas fa-magic mr-1"></i>
-                      Spells
-                    </h4>
-                    <div className="flex space-x-2">
-                      {Array.from({ length: 3 }).map((_, index) => {
-                        const spellCard = cardCollections.playerSpellCards[index];
-                        const cooldowns = playerData.spellCooldowns || {};
-                        const cooldown = spellCard ? cooldowns[spellCard.id] || 0 : 0;
-                        const canUse = spellCard && playerData.energy >= (spellCard.cost || 0) && cooldown <= 0;
-                        
-                        return (
-                          <Tooltip key={index}>
-                            <TooltipTrigger asChild>
-                              <div 
-                                className={`w-12 h-16 border-2 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 ${
-                                  canUse ? 'border-purple-500 hover:border-purple-300 hover:bg-purple-900 bg-gray-700' :
-                                  spellCard ? 'border-gray-600 bg-gray-700 opacity-50' : 'border-purple-500 bg-gray-700'
-                                }`}
-                                onClick={() => {
-                                  if (canUse && spellCard) {
-                                    handleUseSpell(spellCard.id);
-                                  }
-                                }}
-                              >
-                                {spellCard ? (
-                                  <div className="text-center p-1">
-                                    <div className="text-xs font-bold text-purple-300 truncate">{spellCard.name.substring(0, 4)}</div>
-                                    <div className="text-xs text-yellow-400">⚡{spellCard.cost}</div>
-                                    {cooldown > 0 && (
-                                      <div className="text-xs text-red-400">{cooldown}⌛</div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-500 text-xs">—</span>
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {spellCard ? (
-                                <div className="p-2">
-                                  <p className="font-bold">{spellCard.name}</p>
-                                  <p className="text-sm">{spellCard.description}</p>
-                                  <div className="text-xs mt-2">
-                                    <div>Energy Cost: {spellCard.cost || 0}</div>
-                                    <div>Type: {spellCard.spellType}</div>
-                                    {cooldown > 0 && <div className="text-red-400">Cooldown: {cooldown} rounds</div>}
-                                  </div>
-                                </div>
-                              ) : (
-                                <p>Empty spell slot</p>
-                              )}
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
-                    </div>
-                  </div>
+
                 </div>
 
                 {/* VS in center */}
@@ -814,14 +780,118 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
               </div>
             </div>
 
-            {/* Card Selection Area */}
+            {/* Card Selection Area with Spell Deck */}
             <div className="space-y-6">
+              {/* Player Status & Spell Deck */}
+              <div className="flex items-center justify-between bg-gray-800 border border-blue-600 rounded-lg p-4">
+                {/* Player Avatar & Stats */}
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center border-4 border-blue-400 overflow-hidden">
+                    {user.profilePicture ? (
+                      <img 
+                        src={user.profilePicture} 
+                        alt={user.displayName}
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    ) : (
+                      <i className="fas fa-user text-2xl"></i>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-blue-400">{user.displayName}</h3>
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <i className="fas fa-heart text-red-400"></i>
+                        <div className="w-24 bg-gray-700 rounded-full h-3">
+                          <div 
+                            className="bg-red-500 h-3 rounded-full transition-all duration-500"
+                            style={{ width: `${(playerData.hp / 50) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-bold">{playerData.hp}/50</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <i className="fas fa-bolt text-yellow-400"></i>
+                        <div className="w-24 bg-gray-700 rounded-full h-3">
+                          <div 
+                            className="bg-yellow-500 h-3 rounded-full transition-all duration-500"
+                            style={{ width: `${(playerData.energy / 100) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-bold">{playerData.energy}/100</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Spell Deck - Right of avatar */}
+                <div>
+                  <h4 className="text-sm font-bold text-purple-400 mb-2 text-center">
+                    <i className="fas fa-magic mr-1"></i>
+                    Spell Deck (3)
+                  </h4>
+                  <div className="flex space-x-2">
+                    {Array.from({ length: 3 }).map((_, index) => {
+                      const spellCard = cardCollections.playerSpellCards[index];
+                      const cooldowns = playerData.spellCooldowns || {};
+                      const cooldown = spellCard ? cooldowns[spellCard.id] || 0 : 0;
+                      const canUse = spellCard && playerData.energy >= (spellCard.cost || 0) && cooldown <= 0;
+                      
+                      return (
+                        <Tooltip key={index}>
+                          <TooltipTrigger asChild>
+                            <div 
+                              className={`w-14 h-18 border-2 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 ${
+                                canUse ? 'border-purple-500 hover:border-purple-300 hover:bg-purple-900 bg-gray-700' :
+                                spellCard ? 'border-gray-600 bg-gray-700 opacity-50' : 'border-purple-500 bg-gray-700'
+                              }`}
+                              onClick={() => {
+                                if (canUse && spellCard) {
+                                  handleUseSpell(spellCard.id);
+                                }
+                              }}
+                            >
+                              {spellCard ? (
+                                <div className="text-center p-1">
+                                  <div className="text-xs font-bold text-purple-300 truncate">{spellCard.name.substring(0, 5)}</div>
+                                  <div className="text-xs text-yellow-400">⚡{spellCard.cost}</div>
+                                  {cooldown > 0 && (
+                                    <div className="text-xs text-red-400">{cooldown}⌛</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-500 text-xs">—</span>
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {spellCard ? (
+                              <div className="p-2">
+                                <p className="font-bold">{spellCard.name}</p>
+                                <p className="text-sm">{spellCard.description}</p>
+                                <div className="text-xs mt-2">
+                                  <div>Energy Cost: {spellCard.cost || 0}</div>
+                                  <div>Type: {spellCard.spellType}</div>
+                                  {cooldown > 0 && <div className="text-red-400">Cooldown: {cooldown} rounds</div>}
+                                </div>
+                              </div>
+                            ) : (
+                              <p>Empty spell slot</p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <h3 className="text-lg font-bold text-yellow-400 mb-4">
                   <i className="fas fa-layer-group mr-2"></i>
-                  Select Battle Card {selectedBattleCard && '(Click on battlefield position to place)'}
+                  Your Hand (Max 5 Cards) {selectedBattleCard && '(Click on battlefield position to place)'}
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   {cardCollections.playerBattleCards.map((card) => (
                     <GameCard
                       key={card.id}

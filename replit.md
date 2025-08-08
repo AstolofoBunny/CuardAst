@@ -12,6 +12,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (January 2025)
 
+### Battle Interface Overhaul (January 8, 2025)
+- **Attack Mechanics Fixed**: Completely rebuilt attack system with proper damage calculation, resistance handling, and health tracking
+- **Spell Deck Integration**: Added dedicated spell deck UI (3 cards max) positioned next to player avatar with HP/energy bars
+- **Card Limit Enforcement**: Limited player hand to maximum 5 cards to prevent display issues and game balance problems  
+- **Health Tracking System**: Implemented real-time card health display showing current/max health during battles
+- **Improved Battle Interface**: Reorganized battle layout with clear player status section featuring avatar, HP, energy, and spell deck
+- **Console Logging**: Added detailed logging for attack actions and spell casting for better debugging
+- **TypeScript Fixes**: Resolved all type safety issues with null checks and proper variable scoping
+
 ### Server-Side Battle Migration (January 8, 2025)
 - **Migration Completed**: Successfully migrated from local battle state to full server-side Firebase battle system
 - **Real-time Synchronization**: Fixed all real-time updates - deck count, hand management, opponent cards, and turn changes now sync instantly
