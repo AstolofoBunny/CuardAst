@@ -26,6 +26,7 @@ export interface GameCard {
   cost?: number; // Energy cost for spells
   spellType?: 'ranged' | 'melee' | 'magical' | 'combat' | 'other'; // For damage spells
   description?: string;
+  battleDescription?: string; // Battle-specific description with tooltips
 }
 
 export interface PassiveAbility {

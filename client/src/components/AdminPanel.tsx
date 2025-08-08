@@ -33,6 +33,7 @@ export function AdminPanel() {
     spellType: 'other' as 'ranged' | 'melee' | 'magical' | 'combat' | 'other',
     imageUrl: '',
     description: '',
+    battleDescription: '',
     passiveAbilities: [] as string[]
   });
 
@@ -62,6 +63,7 @@ export function AdminPanel() {
       spellType: 'other',
       imageUrl: '',
       description: '',
+      battleDescription: '',
       passiveAbilities: []
     });
     setEditingCard(null);
@@ -85,7 +87,8 @@ export function AdminPanel() {
         rangedResistance: formData.rangedResistance,
         meleeResistance: formData.meleeResistance,
         magicResistance: formData.magicResistance,
-        passiveAbilities: formData.passiveAbilities
+        passiveAbilities: formData.passiveAbilities,
+        battleDescription: formData.battleDescription
       }),
       ...(formData.type === 'ability' && {
         cost: formData.cost,
@@ -122,6 +125,7 @@ export function AdminPanel() {
       spellType: card.spellType || 'other',
       imageUrl: card.imageUrl,
       description: card.description || '',
+      battleDescription: (card as any).battleDescription || '',
       passiveAbilities: card.passiveAbilities || []
     });
     setIsCreateDialogOpen(true);
@@ -337,6 +341,17 @@ export function AdminPanel() {
                             className="bg-gray-900 border-gray-600"
                           />
                         </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-gray-300 text-sm mb-1 block">Battle Description</Label>
+                        <Textarea
+                          placeholder="Card description for battle (visible in tooltips and card collection)"
+                          value={formData.battleDescription}
+                          onChange={(e) => setFormData({ ...formData, battleDescription: e.target.value })}
+                          className="bg-gray-900 border-gray-600"
+                          rows={2}
+                        />
                       </div>
                     </>
                   )}

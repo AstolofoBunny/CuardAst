@@ -38,6 +38,7 @@ export const cards = pgTable("cards", {
   cost: integer("cost"),
   spellType: text("spell_type"),
   description: text("description"),
+  battleDescription: text("battle_description"), // New field for battle card descriptions
   imageUrl: text("image_url"),
   isBase: boolean("is_base").default(false),
   createdAt: timestamp("created_at").default(sql`now()`),
