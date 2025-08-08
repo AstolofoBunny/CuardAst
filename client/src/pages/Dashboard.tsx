@@ -654,7 +654,7 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                 disabled={isGuest}
                 className={`w-full justify-start px-4 py-3 data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-300 hover:text-white ${isGuest ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <i className="fas fa-layer-group mr-3"></i>
+                <i className="fas fa-cards-blank mr-3"></i>
                 Cards & Deck {isGuest && '(Login Required)'}
               </TabsTrigger>
 
@@ -1687,30 +1687,48 @@ export default function Dashboard({ user, activeTab: initialTab = 'ranking', bat
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-8">
-                    {/* Cards Collection Section */}
-                    <div>
-                      <div className="mb-6">
-                        <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                  <div className="p-6">
+                    <div className="mb-6">
+                      <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                        <i className="fas fa-cards-blank mr-2"></i>
+                        Cards & Deck
+                      </h2>
+                      <p className="text-gray-400">Manage your cards and build your deck</p>
+                    </div>
+
+                    {/* Cards & Deck Sub-tabs */}
+                    <Tabs defaultValue="collection" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="collection" className="data-[state=active]:bg-purple-600">
                           <i className="fas fa-th-large mr-2"></i>
                           Card Collection
-                        </h2>
-                        <p className="text-gray-400">Browse all available cards and their statistics</p>
-                      </div>
-                      <CardsGrid cards={cards} />
-                    </div>
-                    
-                    {/* Deck Builder Section */}
-                    <div className="border-t border-gray-700 pt-8">
-                      <div className="mb-6">
-                        <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                        </TabsTrigger>
+                        <TabsTrigger value="deck-builder" className="data-[state=active]:bg-green-600">
                           <i className="fas fa-layer-group mr-2"></i>
                           Deck Builder
-                        </h2>
-                        <p className="text-gray-400">Build and customize your battle deck</p>
-                      </div>
-                      <DeckBuilder />
-                    </div>
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="collection" className="mt-6">
+                        <div>
+                          <div className="mb-6">
+                            <h3 className="text-xl font-bold text-purple-400 mb-2">Card Collection</h3>
+                            <p className="text-gray-400">Browse all available cards and their statistics</p>
+                          </div>
+                          <CardsGrid cards={cards} />
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="deck-builder" className="mt-6">
+                        <div>
+                          <div className="mb-6">
+                            <h3 className="text-xl font-bold text-green-400 mb-2">Deck Builder</h3>
+                            <p className="text-gray-400">Build and customize your battle deck</p>
+                          </div>
+                          <DeckBuilder />
+                        </div>
+                      </TabsContent>
+                    </Tabs>
                   </div>
                 )}
               </div>
