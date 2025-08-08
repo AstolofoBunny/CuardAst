@@ -6,9 +6,9 @@ const firebaseConfig = {
   apiKey: "AIzaSyCWdNcCu4xMuUflyqKGQihpaf-XOlQQNXo",
   authDomain: "astolfokurd.firebaseapp.com",
   projectId: "astolfokurd",
-  storageBucket: "astolfokurd.firebasestorage.app",
+  storageBucket: "astolfokurd.appspot.com",
   messagingSenderId: "296188348285",
-  appId: "1:296188348285:"web:eb8062bb0b9d1dc0612e14",
+  appId: "1:296188348285:web:eb8062bb0b9d1dc0612e14",
   measurementId: "G-VQ75SHXCNM"
 };
 
