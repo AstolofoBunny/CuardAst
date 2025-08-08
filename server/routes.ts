@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer } from 'ws';
 import { storage } from "./storage";
 import { insertUserSchema, insertCardSchema, insertRoomSchema } from "@shared/schema";
 import { z } from "zod";
+import { calculateBattleDamage } from "./battle-system";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // User routes
@@ -156,99 +156,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Room joining routes
-  app.post("/api/rooms/:id/join", async (req, res) => {
+  // Battle damage calculation route - new system
+  app.post("/api/battle-attack", async (req, res) => {
     try {
-      const roomId = req.params.id;
-      const { userId, displayName } = req.body;
+      const { attackerCardId, targetCardId, currentRound } = req.body;
       
-      const room = await storage.getRoom(roomId);
-      if (!room) {
-        return res.status(404).json({ message: "Room not found" });
+      if (!attackerCardId) {
+        return res.status(400).json({ message: "Missing attacker card ID" });
       }
-      
-      if (room.players.length >= room.maxPlayers) {
-        return res.status(400).json({ message: "Room is full" });
-      }
-      
-      if (room.players.includes(userId)) {
-        return res.status(400).json({ message: "Already in room" });
-      }
-      
-      const updatedRoom = await storage.updateRoom(roomId, {
-        players: [...room.players, userId],
-        status: room.players.length + 1 >= room.maxPlayers ? 'active' : 'waiting'
-      });
-      
-      // Broadcast room update to WebSocket clients
-      broadcastRoomUpdate(roomId, updatedRoom);
-      
-      res.json(updatedRoom);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
 
-  app.post("/api/rooms/:id/ready", async (req, res) => {
-    try {
-      const roomId = req.params.id;
-      const { userId } = req.body;
-      
-      const room = await storage.getRoom(roomId);
-      if (!room) {
-        return res.status(404).json({ message: "Room not found" });
-      }
-      
-      const playersReady = room.playersReady || [];
-      if (!playersReady.includes(userId)) {
-        const updatedRoom = await storage.updateRoom(roomId, {
-          playersReady: [...playersReady, userId]
-        });
-        
-        // If all players are ready, start the battle
-        if (updatedRoom.playersReady?.length === updatedRoom.players.length) {
-          const battleId = await createBattle(roomId, updatedRoom.players);
-          await storage.updateRoom(roomId, { battleId });
-        }
-        
-        broadcastRoomUpdate(roomId, updatedRoom);
-        res.json(updatedRoom);
-      } else {
-        res.json(room);
-      }
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // Battle routes
-  app.post("/api/battles/:id/attack", async (req, res) => {
-    try {
-      const battleId = req.params.id;
-      const { attackerId, attackerPosition, targetPosition, targetType } = req.body;
-      
-      const result = await handleBattleAttack(battleId, attackerId, attackerPosition, targetPosition, targetType);
+      const result = await calculateBattleDamage(attackerCardId, targetCardId, currentRound);
       
       if (result.success) {
-        broadcastBattleUpdate(battleId, result.battle);
-        res.json(result);
-      } else {
-        res.status(400).json({ message: result.error });
-      }
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/battles/:id/place-card", async (req, res) => {
-    try {
-      const battleId = req.params.id;
-      const { playerId, cardId, position } = req.body;
-      
-      const result = await handlePlaceCard(battleId, playerId, cardId, position);
-      
-      if (result.success) {
-        broadcastBattleUpdate(battleId, result.battle);
         res.json(result);
       } else {
         res.status(400).json({ message: result.error });
@@ -264,26 +183,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
-  
-  // WebSocket server for real-time updates
-  const wss = new WebSocketServer({ server: httpServer });
-  
-  wss.on('connection', (ws, req) => {
-    console.log('WebSocket client connected');
-    
-    ws.on('message', (message) => {
-      try {
-        const data = JSON.parse(message.toString());
-        handleWebSocketMessage(ws, data);
-      } catch (error) {
-        console.error('WebSocket message error:', error);
-      }
-    });
-    
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
-    });
-  });
 
   return httpServer;
 }

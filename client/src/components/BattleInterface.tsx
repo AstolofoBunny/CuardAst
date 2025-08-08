@@ -119,11 +119,21 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
     return { playerBattleCards, playerAbilityCards, playerSpellCards, opponentSpellCards, allBattleCards, allAbilityCards };
   }, [battle, user, cards]);
 
-  // Action handlers with optimized Firebase updates
+  // New server-side attack handler
   const handleAttack = useCallback(async (attackerCardId: string, targetPosition: string) => {
-    if (!battle || !user || !updateBattle) return;
+    if (!battle || !user) return;
     
-    console.log('Attack initiated:', { attackerCardId, targetPosition, currentTurn: battle.currentTurn, userId: user.uid });
+    console.log('Attack initiated:', { attackerCardId, targetPosition, currentRound: battle.currentRound, userId: user.uid });
+
+    // Check if it's round 2 or later
+    if (battle.currentRound < 2) {
+      toast({
+        title: "Cannot Attack",
+        description: "Attacks are only available starting from round 2",
+        variant: "destructive"
+      });
+      return;
+    }
 
     const playerData = battle.players[user.uid];
     const opponentId = Object.keys(battle.players).find(id => id !== user.uid);
@@ -133,36 +143,43 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
       return;
     }
 
-    const attackerCard = cards.find(c => c.id === attackerCardId);
     const targetCardId = battle.players[opponentId].battlefield[targetPosition as 'left' | 'center' | 'right'];
-    const targetCard = targetCardId ? cards.find(c => c.id === targetCardId) : null;
-
-    if (!attackerCard) {
-      console.log('Attacker card not found');
-      return;
-    }
-
-    console.log('Attack details:', { attackerCard: attackerCard.name, targetCard: targetCard?.name });
 
     try {
-      let damage = attackerCard.attack || 0;
+      // First, calculate damage on server
+      const damageResponse = await fetch('/api/battle-attack', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          attackerCardId,
+          targetCardId,
+          currentRound: battle.currentRound
+        }),
+      });
+
+      const damageResult = await damageResponse.json();
+
+      if (!damageResult.success) {
+        toast({
+          title: "Attack Failed",
+          description: damageResult.message || "Cannot calculate damage",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Now apply the calculated damage to the battle state
+      const attackerCard = cards.find(c => c.id === attackerCardId);
+      const targetCard = targetCardId ? cards.find(c => c.id === targetCardId) : null;
+      
       let updatedBattle = JSON.parse(JSON.stringify(battle)); // Deep copy
 
       if (targetCard && targetCardId) {
-        // Calculate damage with resistances and critical hits
-        const isCritical = Math.random() * 100 < (attackerCard.criticalChance || 0);
-        if (isCritical) {
-          damage = Math.round(damage * ((attackerCard.criticalDamage || 150) / 100));
-        }
-
-        // Apply class-based resistances
-        const resistance = attackerCard.class === 'ranged' ? (targetCard.rangedResistance || 0) :
-                          attackerCard.class === 'melee' ? (targetCard.meleeResistance || 0) :
-                          (targetCard.magicResistance || 0);
+        // Attack enemy card - apply calculated damage
+        const finalDamage = damageResult.damageDealt;
         
-        damage = Math.max(0, damage - Math.round(damage * resistance / 100));
-        damage = Math.max(0, damage - (targetCard.defense || 0));
-
         // Initialize or update card health tracking
         if (!updatedBattle.cardHealths) {
           updatedBattle.cardHealths = {};
@@ -170,38 +187,53 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
         
         const currentHealth = updatedBattle.cardHealths[targetCardId] !== undefined ? 
           updatedBattle.cardHealths[targetCardId] : targetCard.health || 0;
-        const newHealth = Math.max(0, currentHealth - damage);
+        const newHealth = Math.max(0, currentHealth - finalDamage);
         
         updatedBattle.cardHealths[targetCardId] = newHealth;
 
-        console.log('Damage calculation:', { damage, currentHealth, newHealth });
+        console.log('Damage applied:', { finalDamage, currentHealth, newHealth });
 
         // Remove destroyed card if health <= 0
-        if (newHealth <= 0) {
-          updatedBattle.players[opponentId].battlefield[targetPosition as 'left' | 'center' | 'right'] = null;
-          delete updatedBattle.cardHealths[targetCardId];
-          console.log('Card destroyed:', targetCard.name);
+        if (damageResult.cardDestroyed || newHealth <= 0) {
+          const opponentId = Object.keys(battle.players).find(id => id !== user.uid);
+          if (opponentId) {
+            updatedBattle.players[opponentId].battlefield[targetPosition as 'left' | 'center' | 'right'] = null;
+            // Add destroyed card to end of opponent's deck
+            updatedBattle.players[opponentId].deck.push(targetCardId);
+            delete updatedBattle.cardHealths[targetCardId];
+            console.log('Card destroyed:', targetCard.name);
+          }
         }
 
         toast({
-          title: isCritical ? "Critical Hit!" : "Attack Successful",
-          description: `${attackerCard.name} dealt ${damage} damage to ${targetCard.name}${newHealth <= 0 ? ' (Destroyed!)' : ` (${newHealth}/${targetCard.health} HP)`}`,
+          title: damageResult.isCritical ? "Critical Hit!" : "Attack Successful",
+          description: `${attackerCard?.name} dealt ${finalDamage} damage to ${targetCard.name}${damageResult.cardDestroyed ? ' (Destroyed!)' : ` (${newHealth}/${targetCard.health} HP)`}`,
           variant: "default"
         });
       } else {
         // Direct attack to player
-        updatedBattle.players[opponentId].hp = Math.max(0, battle.players[opponentId].hp - damage);
-        
-        console.log('Direct attack:', { damage, newHP: updatedBattle.players[opponentId].hp });
-        
-        toast({
-          title: "Direct Attack!",
-          description: `${attackerCard.name} dealt ${damage} damage to opponent`,
-        });
+        const opponentId = Object.keys(battle.players).find(id => id !== user.uid);
+        if (opponentId) {
+          const finalDamage = damageResult.damageDealt;
+          updatedBattle.players[opponentId].hp = Math.max(0, battle.players[opponentId].hp - finalDamage);
+          
+          console.log('Direct attack:', { finalDamage, newHP: updatedBattle.players[opponentId].hp });
+          
+          // Check for victory
+          if (updatedBattle.players[opponentId].hp <= 0) {
+            updatedBattle.status = 'finished';
+            updatedBattle.phase = 'finished';
+            updatedBattle.winner = user.uid;
+          }
+          
+          toast({
+            title: "Direct Attack!",
+            description: `${attackerCard?.name} dealt ${finalDamage} damage to opponent`,
+          });
+        }
       }
 
-      // Mark attacker as used
-      const playerData = battle.players[user.uid];
+      // Mark attacker as having attacked
       const attackerPosition = playerData.battlefield.left === attackerCardId ? 'left' :
                                playerData.battlefield.center === attackerCardId ? 'center' : 'right';
       if (!updatedBattle.players[user.uid].battlefieldAttacks) {
@@ -209,18 +241,22 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
       }
       updatedBattle.players[user.uid].battlefieldAttacks[attackerPosition] = true;
 
-      console.log('Updating battle state...');
-      await updateBattle(battleId, updatedBattle);
+      // Update battle state
+      updatedBattle.lastActivity = Date.now();
+      console.log('Updating battle state with server-calculated damage...');
+      if (updateBattle) {
+        await updateBattle(battleId, updatedBattle);
+      }
       
       setSelectedAttackCard('');
       setSelectedTarget('');
       
-      console.log('Attack completed successfully');
+      console.log('Attack completed successfully with server-side damage calculation');
     } catch (error) {
       console.error('Error during attack:', error);
       toast({
         title: "Attack Failed",
-        description: "Something went wrong during the attack",
+        description: "Network error occurred",
         variant: "destructive"
       });
     }
@@ -643,7 +679,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                   {['left', 'center', 'right'].map((position) => {
                     const cardId = opponentData?.battlefield?.[position as 'left' | 'center' | 'right'];
                     const card = cardId ? cards.find(c => c.id === cardId) : null;
-                    const isTargetable = selectedAttackCard && battle.currentTurn === user.uid;
+                    const isTargetable = selectedAttackCard && battle.currentTurn === user.uid && battle.currentRound >= 2;
                     
                     return (
                       <Tooltip key={position}>
@@ -713,7 +749,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                     const cardId = playerData.battlefield[position as 'left' | 'center' | 'right'];
                     const card = cardId ? cards.find(c => c.id === cardId) : null;
                     const hasPendingAction = pendingActions.some(a => a.position === position && a.type === 'place_card');
-                    const canAttack = card && battle.currentTurn === user.uid && !playerData.battlefieldAttacks?.[position as 'left' | 'center' | 'right'];
+                    const canAttack = card && battle.currentTurn === user.uid && battle.currentRound >= 2 && !playerData.battlefieldAttacks?.[position as 'left' | 'center' | 'right'];
                     const isSelectedForAttack = selectedAttackCard === cardId;
                     
                     return (
