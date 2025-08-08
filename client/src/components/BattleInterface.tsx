@@ -98,18 +98,25 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
   // Memoized card collections to optimize rendering
   const cardCollections = useMemo(() => {
     if (!battle || !user || !battle.players[user.uid]) {
-      return { playerBattleCards: [], playerAbilityCards: [], allBattleCards: [], allAbilityCards: [] };
+      return { playerBattleCards: [], playerAbilityCards: [], playerSpellCards: [], opponentSpellCards: [], allBattleCards: [], allAbilityCards: [] };
     }
 
     const playerData = battle.players[user.uid];
     const playerHand = playerData.hand || [];
+    const playerSpellDeck = playerData.spellDeck || [];
+    
+    const opponentId = Object.keys(battle.players).find(id => id !== user.uid);
+    const opponentData = opponentId ? battle.players[opponentId] : null;
+    const opponentSpellDeck = opponentData?.spellDeck || [];
     
     const allBattleCards = cards.filter(card => card.type === 'battle');
     const allAbilityCards = cards.filter(card => card.type === 'ability');
     const playerBattleCards = allBattleCards.filter(card => playerHand.includes(card.id));
     const playerAbilityCards = allAbilityCards.filter(card => playerHand.includes(card.id));
+    const playerSpellCards = allAbilityCards.filter(card => playerSpellDeck.includes(card.id));
+    const opponentSpellCards = allAbilityCards.filter(card => opponentSpellDeck.includes(card.id));
 
-    return { playerBattleCards, playerAbilityCards, allBattleCards, allAbilityCards };
+    return { playerBattleCards, playerAbilityCards, playerSpellCards, opponentSpellCards, allBattleCards, allAbilityCards };
   }, [battle, user, cards]);
 
   // Action handlers with optimized Firebase updates
@@ -145,14 +152,28 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
       damage = Math.max(0, damage - Math.round(damage * resistance / 100));
       damage = Math.max(0, damage - (targetCard.defense || 0));
 
+      // Initialize or update card health tracking in battle state
+      const cardHealths = updatedBattle.cardHealths || {};
+      const currentHealth = cardHealths[targetCardId] !== undefined ? cardHealths[targetCardId] : (targetCard.health || 0);
+      const newHealth = Math.max(0, currentHealth - damage);
+      
+      updatedBattle.cardHealths = {
+        ...cardHealths,
+        [targetCardId]: newHealth
+      };
+
       // Remove destroyed card if health <= 0
-      if ((targetCard.health || 0) <= damage) {
+      if (newHealth <= 0) {
         updatedBattle.players[opponentId].battlefield[targetPosition as 'left' | 'center' | 'right'] = null;
+        // Remove from health tracking when destroyed
+        if (updatedBattle.cardHealths) {
+          delete updatedBattle.cardHealths[targetCardId];
+        }
       }
 
       toast({
         title: isCritical ? "Critical Hit!" : "Attack Successful",
-        description: `${attackerCard.name} dealt ${damage} damage to ${targetCard.name}`,
+        description: `${attackerCard.name} dealt ${damage} damage to ${targetCard.name}${newHealth <= 0 ? ' (Destroyed!)' : ` (${newHealth}/${targetCard.health} HP)`}`,
         variant: isCritical ? "default" : "default"
       });
     } else {
@@ -241,6 +262,60 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
     });
   }, [battle, user, cards, updateBattle, battleId, toast]);
 
+  const handleUseSpell = useCallback(async (cardId: string) => {
+    if (!battle || !user || !updateBattle) return;
+
+    const spellCard = cards.find(c => c.id === cardId);
+    const playerData = battle.players[user.uid];
+    
+    if (!spellCard || !playerData) return;
+    
+    const cost = spellCard.cost || 0;
+    if (playerData.energy < cost) {
+      toast({
+        title: "Not Enough Energy",
+        description: `Need ${cost} energy to use ${spellCard.name}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check cooldown
+    const cooldowns = playerData.spellCooldowns || {};
+    if (cooldowns[cardId] && cooldowns[cardId] > 0) {
+      toast({
+        title: "Spell on Cooldown",
+        description: `${spellCard.name} will be ready in ${cooldowns[cardId]} rounds`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Update battle state with spell use and cooldown
+    const updatedBattle = {
+      ...battle,
+      players: {
+        ...battle.players,
+        [user.uid]: {
+          ...playerData,
+          energy: playerData.energy - cost,
+          spellCooldowns: {
+            ...cooldowns,
+            [cardId]: 3 // 3 round cooldown for spells
+          }
+        }
+      },
+      lastActivity: Date.now()
+    };
+
+    await updateBattle(battleId, updatedBattle);
+    
+    toast({
+      title: "Spell Cast!",
+      description: `${spellCard.name} activated!`,
+    });
+  }, [battle, user, cards, updateBattle, battleId, toast]);
+
   const handlePlaceCard = useCallback(async (position: 'left' | 'center' | 'right') => {
     if (!selectedBattleCard || !user || !battle) return;
     
@@ -285,7 +360,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
       description: "Click 'End Turn' to confirm your moves.",
       variant: "default"
     });
-  }, [selectedBattleCard, user, battle, playerData, cards, toast]);
+  }, [selectedBattleCard, user, battle, cards, toast]);
 
   // Apply all pending actions and end turn
   const handleEndTurn = useCallback(async () => {
@@ -325,7 +400,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
       title: "Turn Completed",
       description: "Your moves have been applied! Opponent's turn now.",
     });
-  }, [battle, user, battleId, pendingActions, playerData, updateBattle, toast]);
+  }, [battle, user, battleId, pendingActions, updateBattle, toast]);
 
   if (!battle || !user) {
     return (
@@ -512,6 +587,101 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
               </div>
             )}
 
+            {/* Spell Decks Display */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Opponent's Spell Deck */}
+              <div className="bg-gray-800 border border-red-600 rounded-lg p-4">
+                <h3 className="text-lg font-bold text-red-400 mb-3">
+                  <i className="fas fa-magic mr-2"></i>
+                  {opponentData?.displayName || 'Opponent'}'s Spells
+                  {opponentData?.uid === 'ai_opponent' && (
+                    <span className="ml-2 px-1 py-0.5 bg-purple-600 text-purple-100 text-xs rounded">AI</span>
+                  )}
+                </h3>
+                <div className="flex space-x-2">
+                  {Array.from({ length: 3 }).map((_, index) => {
+                    const spellCard = cardCollections.opponentSpellCards[index];
+                    return (
+                      <div 
+                        key={index}
+                        className="w-16 h-20 border-2 border-red-500 bg-gray-700 rounded-lg flex items-center justify-center"
+                      >
+                        {spellCard ? (
+                          <div className="text-center p-1">
+                            <div className="text-xs font-bold text-red-300 truncate">{spellCard.name}</div>
+                            <div className="text-xs text-yellow-400">⚡{spellCard.cost}</div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 text-xs">Empty</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Player's Spell Deck */}
+              <div className="bg-gray-800 border border-blue-600 rounded-lg p-4">
+                <h3 className="text-lg font-bold text-blue-400 mb-3">
+                  <i className="fas fa-magic mr-2"></i>
+                  Your Spells
+                </h3>
+                <div className="flex space-x-2">
+                  {Array.from({ length: 3 }).map((_, index) => {
+                    const spellCard = cardCollections.playerSpellCards[index];
+                    const cooldowns = playerData.spellCooldowns || {};
+                    const cooldown = spellCard ? cooldowns[spellCard.id] || 0 : 0;
+                    const canUse = spellCard && playerData.energy >= (spellCard.cost || 0) && cooldown <= 0;
+                    
+                    return (
+                      <Tooltip key={index}>
+                        <TooltipTrigger asChild>
+                          <div 
+                            className={`w-16 h-20 border-2 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 ${
+                              canUse ? 'border-blue-500 hover:border-blue-300 hover:bg-blue-900 bg-gray-700' :
+                              spellCard ? 'border-gray-600 bg-gray-700 opacity-50' : 'border-blue-500 bg-gray-700'
+                            }`}
+                            onClick={() => {
+                              if (canUse && spellCard) {
+                                handleUseSpell(spellCard.id);
+                              }
+                            }}
+                          >
+                            {spellCard ? (
+                              <div className="text-center p-1">
+                                <div className="text-xs font-bold text-blue-300 truncate">{spellCard.name}</div>
+                                <div className="text-xs text-yellow-400">⚡{spellCard.cost}</div>
+                                {cooldown > 0 && (
+                                  <div className="text-xs text-red-400">{cooldown}⌛</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-500 text-xs">Empty</span>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {spellCard ? (
+                            <div className="p-2">
+                              <p className="font-bold">{spellCard.name}</p>
+                              <p className="text-sm">{spellCard.description}</p>
+                              <div className="text-xs mt-2">
+                                <div>Energy Cost: {spellCard.cost || 0}</div>
+                                <div>Type: {spellCard.spellType}</div>
+                                {cooldown > 0 && <div className="text-red-400">Cooldown: {cooldown} rounds</div>}
+                              </div>
+                            </div>
+                          ) : (
+                            <p>Empty spell slot</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {/* Battlefield Display with Attack System */}
             <div className="bg-gray-800 border border-purple-600 rounded-lg p-6 mb-6">
               <h2 className="text-xl font-bold text-purple-400 mb-4 text-center">
@@ -553,7 +723,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                                 <div className="text-xs text-gray-300 mt-1">
                                   <div>⚔️{card.attack}</div>
                                   <div>🛡️{card.defense}</div>
-                                  <div>❤️{card.health}</div>
+                                  <div>❤️{cardId && battle.cardHealths && cardId in battle.cardHealths ? battle.cardHealths[cardId] : card.health}/{card.health}</div>
                                 </div>
                               </div>
                             ) : isTargetable ? (
@@ -573,7 +743,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                               <div className="text-xs mt-2">
                                 <div>Attack: {card.attack}</div>
                                 <div>Defense: {card.defense}</div>
-                                <div>Health: {card.health}</div>
+                                <div>Health: {cardId && battle.cardHealths && cardId in battle.cardHealths ? battle.cardHealths[cardId] : card.health}/{card.health}</div>
                               </div>
                             </div>
                           ) : isTargetable ? (
@@ -617,7 +787,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                             onClick={() => {
                               if (!card && selectedBattleCard && !hasPendingAction) {
                                 handlePlaceCard(position as 'left' | 'center' | 'right');
-                              } else if (canAttack) {
+                              } else if (canAttack && cardId) {
                                 handleSelectAttackCard(cardId);
                               }
                             }}
@@ -628,7 +798,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                                 <div className="text-xs text-gray-300 mt-1">
                                   <div>⚔️{card.attack}</div>
                                   <div>🛡️{card.defense}</div>
-                                  <div>❤️{card.health}</div>
+                                  <div>❤️{cardId && battle.cardHealths && cardId in battle.cardHealths ? battle.cardHealths[cardId] : card.health}/{card.health}</div>
                                 </div>
                                 {canAttack && (
                                   <div className="text-xs text-orange-400 mt-1">Can Attack!</div>
@@ -656,7 +826,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                               <div className="text-xs mt-2">
                                 <div>Attack: {card.attack}</div>
                                 <div>Defense: {card.defense}</div>
-                                <div>Health: {card.health}</div>
+                                <div>Health: {cardId && battle.cardHealths && cardId in battle.cardHealths ? battle.cardHealths[cardId] : card.health}/{card.health}</div>
                                 {canAttack && <div className="text-orange-400">Ready to attack!</div>}
                               </div>
                             </div>

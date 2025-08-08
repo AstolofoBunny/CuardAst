@@ -155,6 +155,7 @@ export interface Battle {
   currentRound: number;
   history?: BattleAction[];
   lastActivity: number;
+  cardHealths?: { [cardId: string]: number }; // Track individual card health during battle
 }
 
 export interface BattleAction {
