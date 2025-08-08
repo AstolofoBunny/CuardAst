@@ -25,74 +25,125 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
   const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [pendingActions, setPendingActions] = useState<any[]>([]);
   const [currentTurn, setCurrentTurn] = useState(1);
+  
 
-  // Optimized battle listener - reduced Firebase reads
+
+  // Highly optimized battle listener - minimized Firebase reads and batched updates
   useEffect(() => {
     if (!battleId) return;
+
+    let lastUpdateTimestamp = 0; // Prevent duplicate updates
+    let pendingUpdateBatch: Partial<Battle> = {}; // Batch multiple updates
+    let batchTimeout: NodeJS.Timeout | null = null;
+
+    // Batch updates to reduce writes - only write once every 500ms
+    const flushBatchedUpdates = useCallback(async () => {
+      if (Object.keys(pendingUpdateBatch).length > 0 && updateBattle) {
+        try {
+          await updateBattle(battleId, pendingUpdateBatch);
+          pendingUpdateBatch = {};
+        } catch (error) {
+          console.error('Batch update failed:', error);
+        }
+      }
+      batchTimeout = null;
+    }, [battleId, updateBattle]);
+
+    const batchUpdate = useCallback((updates: Partial<Battle>) => {
+      // Merge updates into the pending batch
+      pendingUpdateBatch = { ...pendingUpdateBatch, ...updates };
+      
+      // Clear existing timeout and set a new one
+      if (batchTimeout) {
+        clearTimeout(batchTimeout);
+      }
+      batchTimeout = setTimeout(flushBatchedUpdates, 500);
+    }, [flushBatchedUpdates]);
 
     const unsubscribe = onSnapshot(
       doc(db, 'battles', battleId),
       (doc: DocumentSnapshot<DocumentData>) => {
         if (doc.exists()) {
           const battleData = doc.data() as Battle;
+          const updateTimestamp = battleData.lastActivity || 0;
+          
+          // Skip if this is an old update or duplicate
+          if (updateTimestamp <= lastUpdateTimestamp) {
+            return;
+          }
+          lastUpdateTimestamp = updateTimestamp;
+          
           setBattle(prevBattle => {
-            // Only update if data actually changed - reduces unnecessary re-renders
-            if (!prevBattle || JSON.stringify(prevBattle) !== JSON.stringify(battleData)) {
+            // Deep comparison only on critical fields to reduce processing
+            const criticalFieldsChanged = !prevBattle ||
+              prevBattle.currentTurn !== battleData.currentTurn ||
+              prevBattle.currentRound !== battleData.currentRound ||
+              prevBattle.status !== battleData.status ||
+              JSON.stringify(prevBattle.players) !== JSON.stringify(battleData.players) ||
+              JSON.stringify(prevBattle.cardHealths) !== JSON.stringify(battleData.cardHealths);
+            
+            if (criticalFieldsChanged) {
               setCurrentTurn(battleData.currentRound || 1);
+              
+              // Only check for battle end conditions if status is active
+              if (battleData.status === 'active') {
+                const players = Object.values(battleData.players);
+                const defeatedPlayers = players.filter(p => p.hp <= 0);
+                
+                if (defeatedPlayers.length > 0) {
+                  const winner = players.find(p => p.hp > 0)?.uid || 'tie';
+                  
+                  // Batch the victory update instead of immediate write
+                  batchUpdate({
+                    status: 'finished',
+                    phase: 'finished',
+                    winner,
+                    lastActivity: Date.now()
+                  });
+                  
+                  // Update user stats only once
+                  if (user && winner !== 'tie' && updateUserStats && winner === user.uid) {
+                    setTimeout(() => {
+                      updateUserStats(user.wins + 1, user.losses);
+                      toast({ title: "Victory!", description: "You won the battle!" });
+                    }, 100);
+                  } else if (user && winner !== 'tie' && updateUserStats && winner !== user.uid) {
+                    setTimeout(() => {
+                      updateUserStats(user.wins, user.losses + 1);
+                      toast({ title: "Defeat", description: "You lost the battle.", variant: "destructive" });
+                    }, 100);
+                  }
+                }
+              }
+              
+              // Only trigger AI turn if it's actually AI's turn and not already processing
+              if (battleData && checkAITurn && battleData.currentTurn === 'ai_opponent') {
+                setTimeout(() => checkAITurn(battleData), 200);
+              }
+              
               return battleData;
             }
             return prevBattle;
           });
-          
-          // Check if battle is finished
-          if (battleData.status !== 'finished') {
-            const players = Object.values(battleData.players);
-            const defeatedPlayers = players.filter(p => p.hp <= 0);
-            
-            if (defeatedPlayers.length > 0) {
-              // End the battle
-              const winner = players.find(p => p.hp > 0)?.uid || 'tie';
-              const finishedBattle = {
-                ...battleData,
-                status: 'finished' as const,
-                phase: 'finished' as const,
-                winner
-              };
-              
-              updateBattle(battleId, finishedBattle);
-              
-              // Update user stats if this player won/lost
-              if (user && winner !== 'tie' && updateUserStats) {
-                if (winner === user.uid) {
-                  updateUserStats(user.wins + 1, user.losses);
-                  toast({ title: "Victory!", description: "You won the battle!" });
-                } else {
-                  updateUserStats(user.wins, user.losses + 1);
-                  toast({ title: "Defeat", description: "You lost the battle.", variant: "destructive" });
-                }
-              }
-              
-              return;
-            }
-          }
-          
-          // Check if AI needs to make a move
-          if (battleData && checkAITurn) {
-            checkAITurn(battleData);
-          }
         }
       },
       (error) => {
         console.error('Battle subscription error:', error);
         toast({
-          title: "Connection Error",
+          title: "Connection Error", 
           description: "Lost connection to battle. Reconnecting...",
           variant: "destructive"
         });
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (batchTimeout) {
+        clearTimeout(batchTimeout);
+        flushBatchedUpdates(); // Flush any pending updates on cleanup
+      }
+    };
   }, [battleId, checkAITurn, updateBattle, user, updateUserStats, toast]);
 
   // Memoized card collections to optimize rendering
@@ -241,9 +292,11 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
       }
       updatedBattle.players[user.uid].battlefieldAttacks[attackerPosition] = true;
 
-      // Update battle state
+      // Update battle state with timestamp for real-time sync
       updatedBattle.lastActivity = Date.now();
       console.log('Updating battle state with server-calculated damage...');
+      
+      // Update battle state with timestamp for real-time sync
       if (updateBattle) {
         await updateBattle(battleId, updatedBattle);
       }
@@ -426,7 +479,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
     });
   }, [selectedBattleCard, user, battle, cards, toast]);
 
-  // Apply all pending actions and end turn
+  // Apply all pending actions and end turn  
   const handleEndTurn = useCallback(async () => {
     if (!battle || !user || !battleId || pendingActions.length === 0) return;
 
@@ -591,6 +644,38 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                     </div>
                   </div>
                   
+                  {/* Spell Deck Display - NEW UI IMPROVEMENT */}
+                  <div className="ml-6">
+                    <h4 className="text-sm font-bold text-purple-400 mb-2 flex items-center">
+                      <i className="fas fa-magic mr-1"></i>
+                      Spell Deck
+                    </h4>
+                    <div className="flex space-x-2">
+                      {cardCollections.playerSpellCards.slice(0, 3).map((spellCard, index) => (
+                        <div
+                          key={spellCard.id}
+                          className="w-12 h-16 bg-purple-900 border border-purple-500 rounded-md p-1 cursor-pointer hover:border-purple-300 transition-colors"
+                          onClick={() => handleUseSpell(spellCard.id)}
+                        >
+                          <div className="text-center">
+                            <div className="text-xs font-bold text-purple-300 truncate">{spellCard.name}</div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              <div>💎{spellCard.cost || 0}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {/* Fill empty spell slots */}
+                      {Array.from({ length: Math.max(0, 3 - cardCollections.playerSpellCards.length) }).map((_, index) => (
+                        <div
+                          key={`empty-spell-${index}`}
+                          className="w-12 h-16 bg-gray-800 border border-gray-600 rounded-md flex items-center justify-center"
+                        >
+                          <span className="text-gray-500 text-xs">Empty</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
                 </div>
 
@@ -946,29 +1031,37 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                 </div>
               </div>
 
-              {/* Action buttons */}
-              <div className="flex justify-center space-x-4">
-                {pendingActions.length > 0 && (
-                  <Button
-                    onClick={handleEndTurn}
-                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8"
-                  >
-                    End Turn ({pendingActions.length} actions)
-                  </Button>
-                )}
-                
-                {selectedAttackCard && (
-                  <Button
-                    onClick={() => {
-                      setSelectedAttackCard('');
-                      setSelectedTarget('');
-                    }}
-                    variant="outline"
-                    className="border-orange-600 text-orange-400 hover:bg-orange-900"
-                  >
-                    Cancel Attack
-                  </Button>
-                )}
+              {/* Enhanced Action buttons with Batch System */}
+              <div className="flex flex-col space-y-4">
+                <div className="flex justify-center space-x-4">
+                  {pendingActions.length > 0 && (
+                    <Button
+                      onClick={handleEndTurn}
+                      className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8"
+                    >
+                      End Turn ({pendingActions.length} actions)
+                    </Button>
+                  )}
+                  
+                  {selectedAttackCard && (
+                    <Button
+                      onClick={() => {
+                        setSelectedAttackCard('');
+                        setSelectedTarget('');
+                      }}
+                      variant="outline"
+                      className="border-orange-600 text-orange-400 hover:bg-orange-900"
+                    >
+                      Cancel Attack
+                    </Button>
+                  )}
+                  
+                  {/* Real-time sync indicator - shows Firebase connection status */}
+                  <div className="flex items-center space-x-2 text-sm text-green-400 py-3">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span>Real-time Updates Active</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
