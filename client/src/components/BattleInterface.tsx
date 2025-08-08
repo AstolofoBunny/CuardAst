@@ -123,7 +123,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
   const handleAttack = useCallback(async (attackerCardId: string, targetPosition: string) => {
     if (!battle || !user || !updateBattle) return;
     
-    console.log('Attack initiated:', { attackerCardId, targetPosition });
+    console.log('Attack initiated:', { attackerCardId, targetPosition, currentTurn: battle.currentTurn, userId: user.uid });
 
     const playerData = battle.players[user.uid];
     const opponentId = Object.keys(battle.players).find(id => id !== user.uid);
@@ -495,10 +495,15 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
             {/* Battle Header */}
             <div className="bg-gray-800 border border-red-600 rounded-lg p-6 mb-6">
               <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold text-red-400">
-                  <i className="fas fa-swords mr-2"></i>
-                  Battle Arena - Turn {currentTurn}
-                </h1>
+                <div>
+                  <h1 className="text-2xl font-bold text-red-400">
+                    <i className="fas fa-swords mr-2"></i>
+                    Battle Arena - Round {currentTurn}
+                  </h1>
+                  <div className={`text-sm mt-1 ${battle.currentTurn === user.uid ? 'text-green-400' : 'text-orange-400'}`}>
+                    {battle.currentTurn === user.uid ? '🟢 Your Turn - You can attack!' : `🟡 ${opponentData?.displayName || 'Opponent'}'s Turn - Please wait`}
+                  </div>
+                </div>
                 <Button 
                   onClick={onLeaveBattle}
                   variant="destructive"
@@ -638,7 +643,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                   {['left', 'center', 'right'].map((position) => {
                     const cardId = opponentData?.battlefield?.[position as 'left' | 'center' | 'right'];
                     const card = cardId ? cards.find(c => c.id === cardId) : null;
-                    const isTargetable = selectedAttackCard && currentTurn >= 2;
+                    const isTargetable = selectedAttackCard && battle.currentTurn === user.uid;
                     
                     return (
                       <Tooltip key={position}>
@@ -708,7 +713,7 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                     const cardId = playerData.battlefield[position as 'left' | 'center' | 'right'];
                     const card = cardId ? cards.find(c => c.id === cardId) : null;
                     const hasPendingAction = pendingActions.some(a => a.position === position && a.type === 'place_card');
-                    const canAttack = card && currentTurn >= 2 && !playerData.battlefieldAttacks?.[position as 'left' | 'center' | 'right'];
+                    const canAttack = card && battle.currentTurn === user.uid && !playerData.battlefieldAttacks?.[position as 'left' | 'center' | 'right'];
                     const isSelectedForAttack = selectedAttackCard === cardId;
                     
                     return (
@@ -836,6 +841,8 @@ export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProp
                       const cooldowns = playerData.spellCooldowns || {};
                       const cooldown = spellCard ? cooldowns[spellCard.id] || 0 : 0;
                       const canUse = spellCard && playerData.energy >= (spellCard.cost || 0) && cooldown <= 0;
+                      
+                      console.log('Spell deck slot', index, ':', spellCard ? spellCard.name : 'Empty', 'from deck:', playerData.spellDeck);
                       
                       return (
                         <Tooltip key={index}>
