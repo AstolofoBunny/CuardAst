@@ -12,6 +12,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (January 2025)
 
+### Project Migration to Replit (January 10, 2025)
+- **Migration Completed**: Successfully migrated project from Replit Agent to standard Replit environment
+- **Database Migration**: Migrated from Neon Database to local PostgreSQL with proper environment setup
+- **Dependencies Updated**: Switched from @neondatabase/serverless to postgres client for database connectivity
+- **Schema Push**: Successfully pushed database schema and initialized base card data
+- **Server Configuration**: Express server now runs properly on port 5000 with database connectivity verified
+- **Type Safety**: Added @types/pg for proper TypeScript support with PostgreSQL client
+- **Environment Setup**: Configured all necessary PostgreSQL environment variables (DATABASE_URL, PGHOST, etc.)
+
+## Recent Changes (January 2025)
+
 ### Battle Interface Overhaul (January 8, 2025)
 - **Attack Mechanics Fixed**: Completely rebuilt attack system with proper damage calculation, resistance handling, and health tracking
 - **Spell Deck Integration**: Added dedicated spell deck UI (3 cards max) positioned next to player avatar with HP/energy bars

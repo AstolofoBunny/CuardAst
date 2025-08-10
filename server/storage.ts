@@ -1,11 +1,11 @@
-import { drizzle } from "drizzle-orm/neon-http";
-import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { eq } from "drizzle-orm";
 import { type User, type InsertUser, type Card, type InsertCard, type Room, type InsertRoom, users, cards, rooms } from "@shared/schema";
 
 // Database connection
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql);
+const client = postgres(process.env.DATABASE_URL!);
+const db = drizzle(client);
 
 export interface IStorage {
   // User operations
