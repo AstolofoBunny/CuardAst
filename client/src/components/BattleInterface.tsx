@@ -1,178 +1,147 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { GameCard } from '@/components/GameCard';
+import { SpellDeckDisplay } from '@/components/SpellDeckDisplay';
+import { BattleLogDisplay } from '@/components/BattleLogDisplay';
 import { Battle, GameCard as GameCardType } from '@/types/game';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore } from '@/hooks/useFirestore';
+import { useBattleSystem } from '@/hooks/useBattleSystem';
 import { useToast } from '@/hooks/use-toast';
-import { doc, onSnapshot, DocumentData, DocumentSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Heart, Zap, Crown, Shield, Sword } from 'lucide-react';
 
 interface BattleInterfaceProps {
-  battleId: string;
+  roomId: string;
   onLeaveBattle: () => void;
 }
 
-export function BattleInterface({ battleId, onLeaveBattle }: BattleInterfaceProps) {
+export function BattleInterface({ roomId, onLeaveBattle }: BattleInterfaceProps) {
   const { user, updateUserHP, updateUserEnergy, updateUserStats } = useAuth();
-  const { cards, updateBattle, markPlayerReady, checkAITurn } = useFirestore();
+  const { cards } = useFirestore();
+  const { 
+    battle, 
+    battleLogs, 
+    spellDecks, 
+    loading,
+    initializeSpellDecks,
+    performAttack,
+    castSpell,
+    updateBattleState,
+    logBattleAction
+  } = useBattleSystem(roomId);
   const { toast } = useToast();
-  const [battle, setBattle] = useState<Battle | null>(null);
   const [selectedBattleCard, setSelectedBattleCard] = useState<string>('');
   const [selectedAttackCard, setSelectedAttackCard] = useState<string>('');
   const [selectedTarget, setSelectedTarget] = useState<string>('');
-  const [pendingActions, setPendingActions] = useState<any[]>([]);
-  const [currentTurn, setCurrentTurn] = useState(1);
+  const [showBattleLog, setShowBattleLog] = useState(false);
   
 
 
-  // Highly optimized battle listener - minimized Firebase reads and batched updates
+  // Initialize spell decks when battle starts
   useEffect(() => {
-    if (!battleId) return;
+    if (battle && battle.status === 'active' && Object.keys(spellDecks).length === 0) {
+      initializeSpellDecks(battle.players);
+    }
+  }, [battle, spellDecks, initializeSpellDecks]);
 
-    let lastUpdateTimestamp = 0; // Prevent duplicate updates
-    let pendingUpdateBatch: Partial<Battle> = {}; // Batch multiple updates
-    let batchTimeout: NodeJS.Timeout | null = null;
+  // Handle battle end conditions
+  useEffect(() => {
+    if (!battle || !user) return;
 
-    // Batch updates to reduce writes - only write once every 500ms
-    const flushBatchedUpdates = useCallback(async () => {
-      if (Object.keys(pendingUpdateBatch).length > 0 && updateBattle) {
-        try {
-          await updateBattle(battleId, pendingUpdateBatch);
-          pendingUpdateBatch = {};
-        } catch (error) {
-          console.error('Batch update failed:', error);
-        }
-      }
-      batchTimeout = null;
-    }, [battleId, updateBattle]);
-
-    const batchUpdate = useCallback((updates: Partial<Battle>) => {
-      // Merge updates into the pending batch
-      pendingUpdateBatch = { ...pendingUpdateBatch, ...updates };
+    const players = Object.values(battle.players);
+    const defeatedPlayers = players.filter(p => p.hp <= 0);
+    
+    if (defeatedPlayers.length > 0 && battle.status === 'active') {
+      const winner = players.find(p => p.hp > 0)?.uid || 'tie';
       
-      // Clear existing timeout and set a new one
-      if (batchTimeout) {
-        clearTimeout(batchTimeout);
-      }
-      batchTimeout = setTimeout(flushBatchedUpdates, 500);
-    }, [flushBatchedUpdates]);
-
-    const unsubscribe = onSnapshot(
-      doc(db, 'battles', battleId),
-      (doc: DocumentSnapshot<DocumentData>) => {
-        if (doc.exists()) {
-          const battleData = doc.data() as Battle;
-          const updateTimestamp = battleData.lastActivity || 0;
-          
-          // Skip if this is an old update or duplicate
-          if (updateTimestamp <= lastUpdateTimestamp) {
-            return;
-          }
-          lastUpdateTimestamp = updateTimestamp;
-          
-          setBattle(prevBattle => {
-            // Deep comparison only on critical fields to reduce processing
-            const criticalFieldsChanged = !prevBattle ||
-              prevBattle.currentTurn !== battleData.currentTurn ||
-              prevBattle.currentRound !== battleData.currentRound ||
-              prevBattle.status !== battleData.status ||
-              JSON.stringify(prevBattle.players) !== JSON.stringify(battleData.players) ||
-              JSON.stringify(prevBattle.cardHealths) !== JSON.stringify(battleData.cardHealths);
-            
-            if (criticalFieldsChanged) {
-              setCurrentTurn(battleData.currentRound || 1);
-              
-              // Only check for battle end conditions if status is active
-              if (battleData.status === 'active') {
-                const players = Object.values(battleData.players);
-                const defeatedPlayers = players.filter(p => p.hp <= 0);
-                
-                if (defeatedPlayers.length > 0) {
-                  const winner = players.find(p => p.hp > 0)?.uid || 'tie';
-                  
-                  // Batch the victory update instead of immediate write
-                  batchUpdate({
-                    status: 'finished',
-                    phase: 'finished',
-                    winner,
-                    lastActivity: Date.now()
-                  });
-                  
-                  // Update user stats only once
-                  if (user && winner !== 'tie' && updateUserStats && winner === user.uid) {
-                    setTimeout(() => {
-                      updateUserStats(user.wins + 1, user.losses);
-                      toast({ title: "Victory!", description: "You won the battle!" });
-                    }, 100);
-                  } else if (user && winner !== 'tie' && updateUserStats && winner !== user.uid) {
-                    setTimeout(() => {
-                      updateUserStats(user.wins, user.losses + 1);
-                      toast({ title: "Defeat", description: "You lost the battle.", variant: "destructive" });
-                    }, 100);
-                  }
-                }
-              }
-              
-              // Only trigger AI turn if it's actually AI's turn and not already processing
-              if (battleData && checkAITurn && battleData.currentTurn === 'ai_opponent') {
-                setTimeout(() => checkAITurn(battleData), 200);
-              }
-              
-              return battleData;
-            }
-            return prevBattle;
-          });
-        }
-      },
-      (error) => {
-        console.error('Battle subscription error:', error);
-        toast({
-          title: "Connection Error", 
-          description: "Lost connection to battle. Reconnecting...",
-          variant: "destructive"
+      setTimeout(async () => {
+        await updateBattleState({
+          status: 'finished',
+          phase: 'finished',
+          winner
         });
-      }
-    );
-
-    return () => {
-      unsubscribe();
-      if (batchTimeout) {
-        clearTimeout(batchTimeout);
-        flushBatchedUpdates(); // Flush any pending updates on cleanup
-      }
-    };
-  }, [battleId, checkAITurn, updateBattle, user, updateUserStats, toast]);
+        
+        if (updateUserStats) {
+          if (winner === user.uid) {
+            updateUserStats(user.wins + 1, user.losses);
+            toast({ title: "Victory!", description: "You won the battle!" });
+          } else if (winner !== 'tie') {
+            updateUserStats(user.wins, user.losses + 1);
+            toast({ title: "Defeat", description: "You lost the battle.", variant: "destructive" });
+          }
+        }
+      }, 1000);
+    }
+  }, [battle, user, updateBattleState, updateUserStats, toast]);
 
   // Memoized card collections to optimize rendering
   const cardCollections = useMemo(() => {
     if (!battle || !user || !battle.players[user.uid]) {
-      return { playerBattleCards: [], playerAbilityCards: [], playerSpellCards: [], opponentSpellCards: [], allBattleCards: [], allAbilityCards: [] };
+      return { 
+        playerBattleCards: [], 
+        playerAbilityCards: [], 
+        allBattleCards: [], 
+        allAbilityCards: [],
+        opponentId: null,
+        playerData: null,
+        opponentData: null
+      };
     }
 
     const playerData = battle.players[user.uid];
     const playerHand = playerData.hand || [];
-    const playerSpellDeck = playerData.spellDeck || [];
     
     const opponentId = Object.keys(battle.players).find(id => id !== user.uid);
     const opponentData = opponentId ? battle.players[opponentId] : null;
-    const opponentSpellDeck = opponentData?.spellDeck || [];
     
     const allBattleCards = cards.filter(card => card.type === 'battle');
     const allAbilityCards = cards.filter(card => card.type === 'ability');
     const playerBattleCards = allBattleCards.filter(card => playerHand.includes(card.id)).slice(0, 5);
     const playerAbilityCards = allAbilityCards.filter(card => playerHand.includes(card.id)).slice(0, 5);
-    const playerSpellCards = allAbilityCards.filter(card => playerSpellDeck.includes(card.id));
-    const opponentSpellCards = allAbilityCards.filter(card => opponentSpellDeck.includes(card.id));
 
-    return { playerBattleCards, playerAbilityCards, playerSpellCards, opponentSpellCards, allBattleCards, allAbilityCards };
+    return { 
+      playerBattleCards, 
+      playerAbilityCards, 
+      allBattleCards, 
+      allAbilityCards,
+      opponentId,
+      playerData,
+      opponentData
+    };
   }, [battle, user, cards]);
 
-  // New server-side attack handler
+  // Handle attack with new battle system
   const handleAttack = useCallback(async (attackerCardId: string, targetPosition: string) => {
     if (!battle || !user) return;
+
+    const isDirectAttack = targetPosition === 'player';
+    const targetPlayerId = cardCollections.opponentId;
+    
+    if (!targetPlayerId) {
+      toast({
+        title: "No Target",
+        description: "No opponent found",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      await performAttack(user.uid, attackerCardId, targetPosition, targetPlayerId);
+      setSelectedAttackCard('');
+      setSelectedTarget('');
+    } catch (error) {
+      console.error('Attack failed:', error);
+      toast({
+        title: "Attack Failed",
+        description: "Unable to perform attack",
+        variant: "destructive"
+      });
+    }
+  }, [battle, user, cardCollections.opponentId, performAttack, toast]);
     
     console.log('Attack initiated:', { attackerCardId, targetPosition, currentRound: battle.currentRound, userId: user.uid });
 

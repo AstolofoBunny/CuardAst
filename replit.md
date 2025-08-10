@@ -12,6 +12,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (January 2025)
 
+### Firebase Battle System Refactor (January 10, 2025)
+- **Multi-Collection Architecture**: Implemented new Firebase structure with separate collections for battles, logs, and spell decks
+- **Battle State Management**: Split battle data into main room document (current state only) and subcollections for action history
+- **Action Logging System**: Each battle action now creates separate document in rooms/{roomId}/logs/{logId} with detailed event tracking
+- **Spell Deck Integration**: Created dedicated spell deck collection rooms/{roomId}/decks/{playerId} with visual display during battles
+- **Damage Phase Implementation**: Added proper damage phase with real-time logging and UI feedback showing damage calculations
+- **Real-time Synchronization**: All battle components now sync instantly across clients using Firebase subcollection listeners
+- **Enhanced Battle Interface**: Completely rebuilt battle UI with spell deck display, battle log viewer, and damage phase indicators
+- **Server-side Damage Calculation**: Integrated existing battle-system.ts for accurate damage calculations with resistance and critical hits
+
 ### Project Migration to Replit (January 10, 2025)
 - **Migration Completed**: Successfully migrated project from Replit Agent to standard Replit environment
 - **Database Migration**: Migrated from Neon Database to local PostgreSQL with proper environment setup

@@ -117,19 +117,24 @@ export interface Room {
   playersReady?: string[]; // Track which players clicked ready
 }
 
+// New improved Battle interface - only stores current state
 export interface Battle {
   id?: string;
   roomId: string;
+  phase: 'preparation' | 'battle' | 'damage' | 'finished';
+  currentRound: number;
+  currentTurn: string; // player UID or 'ai_opponent'
+  status: 'active' | 'waiting_for_ready' | 'finished';
+  createdAt: number;
+  lastActivity: number;
+  winner?: string;
   players: {
     [playerId: string]: {
       uid: string;
       displayName: string;
       hp: number;
       energy: number;
-      deck: string[];
-      hand: string[];
-      spellDeck: string[]; // Available spell cards
-      spellCooldowns: { [spellId: string]: number }; // Cooldown rounds remaining
+      hand: string[]; // Cards currently in hand
       battlefield: {
         left: string | null; // Card ID
         center: string | null; // Card ID  
@@ -140,24 +145,46 @@ export interface Battle {
         center: boolean;
         right: boolean;
       };
-      selectedBattleCard?: string;
-      selectedAbilities?: string[];
       isReady: boolean;
       battleCardsPlayedThisRound: number;
     };
   };
-  currentTurn: string;
-  phase: 'preparation' | 'battle' | 'finished';
-  status: 'active' | 'waiting_for_ready' | 'finished';
-  readyCount?: number;
-  winner?: string;
-  createdAt: number;
-  currentRound: number;
-  history?: BattleAction[];
-  lastActivity: number;
-  cardHealths?: { [cardId: string]: number }; // Track individual card health during battle
 }
 
+// Battle Log entry - each action is a separate document
+export interface BattleLog {
+  id?: string;
+  battleId: string;
+  timestamp: number;
+  playerId: string;
+  action: 'attack' | 'place_card' | 'cast_spell' | 'damage_dealt' | 'card_destroyed' | 'turn_end' | 'phase_change';
+  details: {
+    cardUsed?: string;
+    target?: string; // 'player' or card position like 'left', 'center', 'right'
+    damage?: number;
+    isCritical?: boolean;
+    cardDestroyed?: boolean;
+    newHp?: number;
+    position?: string; // battlefield position
+    spellType?: string;
+    energyCost?: number;
+    resistanceApplied?: number;
+    finalDamage?: number;
+    [key: string]: any;
+  };
+  description: string; // Human-readable description of the action
+}
+
+// Spell Deck collection - separate document for each player
+export interface SpellDeck {
+  id?: string;
+  battleId: string;
+  playerId: string;
+  cards: string[]; // Array of spell card IDs (max 3)
+  spellCooldowns: { [spellId: string]: number }; // Cooldown rounds remaining
+}
+
+// Legacy interface - replaced by BattleLog
 export interface BattleAction {
   round: number;
   playerId: string;

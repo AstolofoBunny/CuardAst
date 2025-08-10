@@ -1,0 +1,91 @@
+I have a multiplayer battle site using Firebase.
+Currently, one battle is stored in a single Firestore document, for example:
+
+js
+Копировать
+Редактировать
+{
+  createdAt: 1754824219225,
+  currentRound: 1,
+  currentTurn: "pSMp1IWsTRaLafCovZBL7eVtD9H3",
+  lastActivity: 1754824219225,
+  phase: "battle",
+  players: { ... },
+  readyCount: 0,
+  roomId: "nneBmWmyjoRN7j3Hvj7T",
+  status: "active"
+}
+Problems:
+
+All battle state is in one document → any change rewrites the whole object.
+
+No action history → impossible to track events step-by-step.
+
+No separate collection for spell decks — decks don’t appear visually or in the database.
+
+Damage phase does not work: HP just changes without logging damage events in the database.
+
+What needs to be done:
+
+Split the battle into multiple collections/documents in Firestore:
+
+Main room document — rooms/{roomId}
+Stores only the current battle state:
+
+js
+Копировать
+Редактировать
+{
+  phase: "battle",
+  currentRound: 1,
+  currentTurn: "uid123",
+  createdAt: serverTimestamp(),
+  lastActivity: serverTimestamp(),
+  players: {
+    uid123: { hp: 50, energy: 100, hand: [...], battlefield: {...} },
+    uid456: { hp: 50, energy: 100, hand: [...], battlefield: {...} }
+  }
+}
+Battle logs — rooms/{roomId}/logs/{logId}
+Each action is stored as a separate document:
+
+js
+Копировать
+Редактировать
+{
+  timestamp: serverTimestamp(),
+  playerId: "uid123",
+  action: "attack",
+  target: "uid456",
+  damage: 15,
+  cardUsed: "fireball"
+}
+Spell decks — rooms/{roomId}/decks/{playerId}
+
+js
+Копировать
+Редактировать
+{
+  playerId: "uid123",
+  cards: ["storm-archer", "fireball", "healing-light"]
+}
+Logic changes:
+
+When the battle starts, load decks from decks and deal cards to each player’s hand inside players.
+
+When an attack happens, first create a record in logs, then update the target player’s HP in players.
+
+Display spell decks visually during the battle on the frontend.
+
+The damage phase should be shown in the UI and logged as a separate event in the database.
+
+Neural network tasks:
+
+Refactor Firebase usage to follow this structure.
+
+Implement visual display of spell decks in battle.
+
+Implement working damage phase with logging in logs.
+
+Sync frontend and backend according to the new architecture.
+
